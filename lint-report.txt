@@ -1,0 +1,219 @@
+﻿
+> gacia@0.0.0 lint
+> eslint .
+
+
+C:\Users\Dev\Desktop\gacia\src\components\customers\CustomerLedgerDrawer.jsx
+  11:8  warning  React Hook useEffect has a missing dependency: 'fetchLedger'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Dev\Desktop\gacia\src\components\customers\CustomerModal.jsx
+  17:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  15 |     useEffect(() => {
+  16 |         if (customer) {
+> 17 |             setFormData({
+     |             ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  18 |                 name: customer.name || '',
+  19 |                 email: customer.email || '',
+  20 |                 phone: customer.phone || '',  react-hooks/set-state-in-effect
+
+C:\Users\Dev\Desktop\gacia\src\components\customers\CustomerPaymentsModal.jsx
+  3:10  error  'supabase' is defined but never used. Allowed unused vars must match /^[A-Z_]/u  no-unused-vars
+
+C:\Users\Dev\Desktop\gacia\src\components\inventory\BranchModal.jsx
+  15:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  13 |     useEffect(() => {
+  14 |         if (branch) {
+> 15 |             setFormData({
+     |             ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  16 |                 name: branch.name || '',
+  17 |                 address: branch.address || '',
+  18 |                 phone: branch.phone || '',  react-hooks/set-state-in-effect
+
+C:\Users\Dev\Desktop\gacia\src\components\inventory\KardexDrawer.jsx
+  12:8  warning  React Hook useEffect has a missing dependency: 'fetchMovements'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Dev\Desktop\gacia\src\components\inventory\ProductModal.jsx
+  35:8  warning  React Hook useEffect has a missing dependency: 'fetchProductBranchSettings'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Dev\Desktop\gacia\src\components\inventory\PurchaseModal.jsx
+  17:9  error  Error: Cannot access variable before it is declared
+
+`fetchInitialData` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  15 |
+  16 |     useEffect(() => {
+> 17 |         fetchInitialData()
+     |         ^^^^^^^^^^^^^^^^ `fetchInitialData` accessed before it is declared
+  18 |     }, [])
+  19 |
+  20 |     async function fetchInitialData() {
+
+  18 |     }, [])
+  19 |
+> 20 |     async function fetchInitialData() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 21 |         const [suppliersRes, branchesRes, productsRes] = await Promise.all([
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 22 |             supabase.from('suppliers').select('*').order('name'),
+     ÔÇª
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 30 |         if (branchesRes.data?.length > 0) setSelectedBranch(branchesRes.data[0].id)
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 31 |     }
+     | ^^^^^^ `fetchInitialData` is declared here
+  32 |
+  33 |     const addItem = (product) => {
+  34 |         setItems(prev => {  react-hooks/immutability
+
+C:\Users\Dev\Desktop\gacia\src\components\inventory\TransferModal.jsx
+  17:9   error    Error: Cannot access variable before it is declared
+
+`fetchInitialData` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  15 |
+  16 |     useEffect(() => {
+> 17 |         fetchInitialData()
+     |         ^^^^^^^^^^^^^^^^ `fetchInitialData` accessed before it is declared
+  18 |     }, [])
+  19 |
+  20 |     useEffect(() => {
+
+  24 |     }, [originBranch])
+  25 |
+> 26 |     async function fetchInitialData() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 27 |         const [branchesRes, productsRes] = await Promise.all([
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 28 |             supabase.from('branches').select('*').eq('active', true).order('name'),
+     ÔÇª
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 39 |         }
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 40 |     }
+     | ^^^^^^ `fetchInitialData` is declared here
+  41 |
+  42 |     async function fetchBranchStock() {
+  43 |         try {  react-hooks/immutability
+  22:13  error    Error: Cannot access variable before it is declared
+
+`fetchBranchStock` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  20 |     useEffect(() => {
+  21 |         if (originBranch) {
+> 22 |             fetchBranchStock()
+     |             ^^^^^^^^^^^^^^^^ `fetchBranchStock` accessed before it is declared
+  23 |         }
+  24 |     }, [originBranch])
+  25 |
+
+  40 |     }
+  41 |
+> 42 |     async function fetchBranchStock() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 43 |         try {
+     | ^^^^^^^^^^^^^
+> 44 |             const { data } = await supabase
+     ÔÇª
+     | ^^^^^^^^^^^^^
+> 60 |         }
+     | ^^^^^^^^^^^^^
+> 61 |     }
+     | ^^^^^^ `fetchBranchStock` is declared here
+  62 |
+  63 |     const addItem = (product) => {
+  64 |         setItems(prev => {                                                                                                                                                                                                                   react-hooks/immutability
+  24:8   warning  React Hook useEffect has a missing dependency: 'fetchBranchStock'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    react-hooks/exhaustive-deps
+
+C:\Users\Dev\Desktop\gacia\src\components\pos\CheckoutModal.jsx
+  14:9  error  Error: Cannot access variable before it is declared
+
+`fetchCustomers` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  12 |
+  13 |     useEffect(() => {
+> 14 |         fetchCustomers()
+     |         ^^^^^^^^^^^^^^ `fetchCustomers` accessed before it is declared
+  15 |     }, [])
+  16 |
+  17 |     async function fetchCustomers() {
+
+  15 |     }, [])
+  16 |
+> 17 |     async function fetchCustomers() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 18 |         const { data } = await supabase.from('customers').select('*').eq('active', true).order('name')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 19 |         setCustomers(data || [])
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 20 |     }
+     | ^^^^^^ `fetchCustomers` is declared here
+  21 |
+  22 |     const filteredCustomers = customers.filter(c =>
+  23 |         c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||  react-hooks/immutability
+
+C:\Users\Dev\Desktop\gacia\src\components\pos\ProductGrid.jsx
+  11:8  warning  React Hook useEffect has a missing dependency: 'fetchProducts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Dev\Desktop\gacia\src\components\suppliers\SupplierModal.jsx
+  17:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+  15 |     useEffect(() => {
+  16 |         if (supplier) {
+> 17 |             setFormData({
+     |             ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  18 |                 name: supplier.name || '',
+  19 |                 contact_name: supplier.contact_name || '',
+  20 |                 email: supplier.email || '',  react-hooks/set-state-in-effect
+
+C:\Users\Dev\Desktop\gacia\src\components\users\UserModal.jsx
+  17:9  error  Error: Cannot access variable before it is declared
+
+`fetchBranches` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+  15 |
+  16 |     useEffect(() => {
+> 17 |         fetchBranches()
+     |         ^^^^^^^^^^^^^ `fetchBranches` accessed before it is declared
+  18 |
+  19 |         async function loadUserSpecificData() {
+  20 |             if (user) {
+
+  57 |     }, [user])
+  58 |
+> 59 |     async function fetchBranches() {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 60 |         const { data } = await supabase.from('branches').select('*').eq('active', true).order('name')
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 61 |         setBranches(data || [])
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 62 |     }
+     | ^^^^^^ `fetchBranches` is declared here
+  63 |
+  64 |     const handleSubmit = (e) => {
+  65 |         e.preventDefault()  react-hooks/immutability
+
+C:\Users\Dev\Desktop\gacia\src\pages\Inventory.jsx
+  42:8  warning  React Hook useEffect has a missing dependency: 'fetchProducts'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+Ô£û 15 problems (9 errors, 6 warnings)
+
