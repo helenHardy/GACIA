@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 
 export default function UserModal({ user, onClose, onSave, isSaving }) {
     const [branches, setBranches] = useState([])
+    const [availableRoles, setAvailableRoles] = useState([])
     const [formData, setFormData] = useState({
         full_name: '',
         email: '',
@@ -14,11 +15,15 @@ export default function UserModal({ user, onClose, onSave, isSaving }) {
     })
 
     useEffect(() => {
-        async function fetchBranches() {
-            const { data } = await supabase.from('branches').select('*').eq('active', true).order('name')
-            setBranches(data || [])
+        async function fetchInitialData() {
+            const [branchesRes, rolesRes] = await Promise.all([
+                supabase.from('branches').select('*').eq('active', true).order('name'),
+                supabase.from('roles').select('name').order('name')
+            ])
+            setBranches(branchesRes.data || [])
+            setAvailableRoles(rolesRes.data || [])
         }
-        fetchBranches()
+        fetchInitialData()
 
         async function loadUserSpecificData() {
             if (user) {
@@ -188,9 +193,9 @@ export default function UserModal({ user, onClose, onSave, isSaving }) {
                                     value={formData.role}
                                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                 >
-                                    <option value="Administrador">Administrador</option>
-                                    <option value="Empleado">Empleado</option>
-                                    <option value="Cajero">Cajero</option>
+                                    {availableRoles.map(r => (
+                                        <option key={r.name} value={r.name}>{r.name}</option>
+                                    ))}
                                 </select>
                             </div>
                         </div>

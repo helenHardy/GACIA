@@ -7,9 +7,11 @@ export default function Purchases() {
     const [purchases, setPurchases] = useState([])
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
-    const [error, setError] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
+    const [isAdmin, setIsAdmin] = useState(false)
+    const [isReadOnly, setIsReadOnly] = useState(false)
+    const [error, setError] = useState(null)
 
     // UI state
     const [toast, setToast] = useState(null)
@@ -36,9 +38,18 @@ export default function Purchases() {
     })
 
     useEffect(() => {
+        checkUserRole()
         fetchPurchases()
         fetchSettings()
     }, [])
+
+    async function checkUserRole() {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+            setIsAdmin(data?.role === 'Administrador')
+        }
+    }
 
     async function fetchSettings() {
         const { data } = await supabase.from('settings').select('*')
@@ -110,7 +121,7 @@ export default function Purchases() {
         })
     }
 
-    const handleEdit = async (purchase) => {
+    const handleEdit = async (purchase, forceReadOnly = false) => {
         try {
             setLoading(true)
             const { data: items, error } = await supabase
@@ -135,12 +146,30 @@ export default function Purchases() {
                 ...purchase,
                 items: formattedItems
             })
+            setIsReadOnly(forceReadOnly || (!isAdmin && !purchase.can_edit))
             setIsModalOpen(true)
         } catch (err) {
             console.error(err)
             alert('Error al cargar detalles de la compra')
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function togglePermission(purchaseId, field, currentValue) {
+        try {
+            const { error } = await supabase
+                .from('purchases')
+                .update({ [field]: !currentValue })
+                .eq('id', purchaseId)
+
+            if (error) throw error
+
+            // Update local state
+            setPurchases(prev => prev.map(p => p.id === purchaseId ? { ...p, [field]: !currentValue } : p))
+        } catch (err) {
+            console.error('Error toggling permission:', err)
+            showToast('Error al actualizar permisos', 'error')
         }
     }
 
@@ -247,6 +276,7 @@ export default function Purchases() {
                         setEditingPurchase(null)
                     }}
                     onSave={handleSave}
+                    readOnly={isReadOnly}
                 />
             )}
 
@@ -416,23 +446,81 @@ export default function Purchases() {
                                             </span>
                                         </td>
                                         <td style={{ padding: '1.25rem 1.5rem' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                                                <button
-                                                    onClick={() => handleEdit(p)}
-                                                    className="btn"
-                                                    style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}
-                                                    title="Ver Detalles"
-                                                >
-                                                    <Edit2 size={18} />
-                                                </button>
-                                                <button
-                                                    onClick={() => confirmDelete(p)}
-                                                    className="btn"
-                                                    style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))' }}
-                                                    title="Anular"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>
+                                                {/* Admin: Permissions Control */}
+                                                {isAdmin && (
+                                                    <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '4px', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.3)' }}>
+                                                        <button
+                                                            onClick={() => togglePermission(p.id, 'can_edit', p.can_edit)}
+                                                            className="btn-icon"
+                                                            title={p.can_edit ? "Bloquear Edición" : "Habilitar Edición"}
+                                                            style={{
+                                                                padding: '6px',
+                                                                borderRadius: '8px',
+                                                                border: 'none',
+                                                                backgroundColor: p.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent',
+                                                                color: p.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => togglePermission(p.id, 'can_void', p.can_void)}
+                                                            className="btn-icon"
+                                                            title={p.can_void ? "Bloquear Anulación" : "Habilitar Anulación"}
+                                                            style={{
+                                                                padding: '6px',
+                                                                borderRadius: '8px',
+                                                                border: 'none',
+                                                                backgroundColor: p.can_void ? 'hsl(var(--destructive) / 0.15)' : 'transparent',
+                                                                color: p.can_void ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)',
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {(isAdmin || p.can_edit) ? (
+                                                    <button
+                                                        onClick={() => handleEdit(p, false)}
+                                                        className="btn"
+                                                        style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}
+                                                        title="Modificar"
+                                                    >
+                                                        <Edit2 size={18} />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleEdit(p, true)}
+                                                        className="btn"
+                                                        style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.4)', color: 'hsl(var(--foreground) / 0.4)' }}
+                                                        title="Ver Detalles"
+                                                    >
+                                                        <Eye size={18} />
+                                                    </button>
+                                                )}
+
+                                                {(isAdmin || p.can_void) && (
+                                                    <button
+                                                        onClick={() => confirmDelete(p)}
+                                                        className="btn"
+                                                        style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))' }}
+                                                        title="Anular"
+                                                    >
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, Save, Plus, Trash2, Search, Loader2, AlertCircle, Building2, User, Package, Calculator, Info, ChevronRight, Box, Printer, ClipboardList, Tag } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-export default function SaleModal({ onClose, onSave, isSaving, initialData, currencySymbol = 'Bs.' }) {
+export default function SaleModal({ onClose, onSave, isSaving, initialData, currencySymbol = 'Bs.', readOnly = false }) {
     const [customers, setCustomers] = useState([])
     const [branches, setBranches] = useState([])
     const [products, setProducts] = useState([])
@@ -128,7 +128,8 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                     <User size={14} /> Cliente
                                 </label>
                                 <select
-                                    style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'white', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
+                                    disabled={readOnly}
+                                    style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'white', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
                                     value={selectedCustomer}
                                     onChange={(e) => setSelectedCustomer(e.target.value)}
                                 >
@@ -142,7 +143,8 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                     <Building2 size={14} /> Sucursal de Origen
                                 </label>
                                 <select
-                                    style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'white', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
+                                    disabled={readOnly}
+                                    style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'white', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
                                     value={selectedBranch}
                                     onChange={(e) => setSelectedBranch(e.target.value)}
                                     required
@@ -162,7 +164,8 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                         step="0.01"
                                         value={discount}
                                         onChange={(e) => setDiscount(e.target.value)}
-                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.2rem', backgroundColor: 'white', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
+                                        disabled={readOnly}
+                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.2rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'white', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
                                     />
                                 </div>
                             </div>
@@ -182,7 +185,8 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                         type="number"
                                         value={tax}
                                         onChange={(e) => setTax(e.target.value)}
-                                        style={{ width: '80px', border: 'none', background: 'transparent', textAlign: 'right', fontWeight: '700', outline: 'none' }}
+                                        disabled={readOnly}
+                                        style={{ width: '80px', border: 'none', background: 'transparent', textAlign: 'right', fontWeight: '700', outline: 'none', color: readOnly ? 'inherit' : 'hsl(var(--primary))' }}
                                     />
                                 </div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.9rem', color: 'hsl(var(--destructive))', opacity: 0.8 }}>
@@ -203,14 +207,16 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                     <Package size={20} /> Detalle de Ítems
                                 </h3>
                                 <div style={{ position: 'relative' }}>
-                                    <button
-                                        type="button"
-                                        className="btn btn-primary shadow-lg shadow-primary/20"
-                                        onClick={() => setShowProductSearch(!showProductSearch)}
-                                        style={{ gap: '0.5rem', borderRadius: '12px', padding: '0.6rem 1.25rem' }}
-                                    >
-                                        <Plus size={18} /> AGREGAR PRODUCTO
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary shadow-lg shadow-primary/20"
+                                            onClick={() => setShowProductSearch(!showProductSearch)}
+                                            style={{ gap: '0.5rem', borderRadius: '12px', padding: '0.6rem 1.25rem' }}
+                                        >
+                                            <Plus size={18} /> AGREGAR PRODUCTO
+                                        </button>
+                                    )}
 
                                     {showProductSearch && (
                                         <div className="card shadow-2xl" style={{ position: 'absolute', right: 0, top: '100%', marginTop: '0.75rem', width: '350px', zIndex: 110, padding: 0, overflow: 'hidden', borderRadius: '18px' }}>
@@ -278,6 +284,7 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                                         <input
                                                             type="number"
                                                             value={item.quantity}
+                                                            disabled={readOnly}
                                                             onChange={(e) => updateItem(item.product_id, 'quantity', e.target.value)}
                                                             style={{ width: '100%', padding: '0.5rem', textAlign: 'center', backgroundColor: 'hsl(var(--secondary) / 0.3)', border: 'none', borderRadius: '8px', fontWeight: '800', outline: 'none' }}
                                                         />
@@ -289,6 +296,7 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                                                 type="number"
                                                                 step="0.01"
                                                                 value={item.price}
+                                                                disabled={readOnly}
                                                                 onChange={(e) => updateItem(item.product_id, 'price', e.target.value)}
                                                                 style={{ width: '100%', padding: '0.5rem 0.5rem 0.5rem 1.5rem', textAlign: 'center', backgroundColor: 'hsl(var(--secondary) / 0.3)', border: 'none', borderRadius: '8px', fontWeight: '800', outline: 'none' }}
                                                             />
@@ -298,13 +306,15 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                                         {currencySymbol}{item.total.toFixed(2)}
                                                     </td>
                                                     <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeItem(item.product_id)}
-                                                            style={{ backgroundColor: 'hsl(var(--destructive) / 0.1)', border: 'none', color: 'hsl(var(--destructive))', padding: '0.4rem', borderRadius: '8px', cursor: 'pointer' }}
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {!readOnly && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeItem(item.product_id)}
+                                                                style={{ backgroundColor: 'hsl(var(--destructive) / 0.1)', border: 'none', color: 'hsl(var(--destructive))', padding: '0.4rem', borderRadius: '8px', cursor: 'pointer' }}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))
@@ -328,14 +338,16 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                             </button>
                         )}
                         <button type="button" onClick={onClose} className="btn" style={{ padding: '0.85rem 2rem', borderRadius: '14px', backgroundColor: 'white', fontWeight: '800' }}>CANCELAR</button>
-                        <button
-                            type="submit"
-                            className="btn btn-primary shadow-xl shadow-primary/20"
-                            disabled={isSaving}
-                            style={{ gap: '0.75rem', padding: '0.85rem 2.5rem', borderRadius: '14px', fontWeight: '800' }}
-                        >
-                            {isSaving ? <><Loader2 size={22} className="animate-spin" /> PROCESANDO... </> : <><Save size={22} /> {initialData ? 'GUARDAR CAMBIOS' : 'REGISTRAR OPERACIÓN'}</>}
-                        </button>
+                        {!readOnly && (
+                            <button
+                                type="submit"
+                                className="btn btn-primary shadow-xl shadow-primary/20"
+                                disabled={isSaving}
+                                style={{ gap: '0.75rem', padding: '0.85rem 2.5rem', borderRadius: '14px', fontWeight: '800' }}
+                            >
+                                {isSaving ? <><Loader2 size={22} className="animate-spin" /> PROCESANDO... </> : <><Save size={22} /> {initialData ? 'GUARDAR CAMBIOS' : 'REGISTRAR OPERACIÓN'}</>}
+                            </button>
+                        )}
                     </div>
                 </form>
             </div>

@@ -35,12 +35,27 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
 
     async function fetchInitialData() {
         try {
-            const [branchesData, brandsData, categoriesData] = await Promise.all([
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            const [branchesReq, brandsData, categoriesData, profileReq, assignmentsReq] = await Promise.all([
                 supabase.from('branches').select('*').eq('active', true),
                 inventoryService.getBrands(),
-                inventoryService.getCategories()
+                inventoryService.getCategories(),
+                supabase.from('profiles').select('role').eq('id', user.id).single(),
+                supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
             ])
-            setBranches(branchesData.data || [])
+
+            let allBranches = branchesReq.data || []
+            const userRole = profileReq.data?.role
+            const assignedBranchIds = (assignmentsReq.data || []).map(a => a.branch_id)
+
+            // Filter branches: Show all if Admin, otherwise only assigned
+            if (userRole !== 'Administrador') {
+                allBranches = allBranches.filter(b => assignedBranchIds.includes(b.id))
+            }
+
+            setBranches(allBranches)
             setBrands(brandsData || [])
             setCategories(categoriesData || [])
         } catch (err) {

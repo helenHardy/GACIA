@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle, Ship, XCircle, ChevronRight, X, Trash2, Eye, Box, ArrowLeftRight, Truck, MapPin, Calendar, User } from 'lucide-react'
+import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle, Ship, XCircle, ChevronRight, X, Trash2, Eye, Edit2, Box, ArrowLeftRight, Truck, MapPin, Calendar, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import TransferModal from '../components/inventory/TransferModal'
 import TransferDetailModal from '../components/inventory/TransferDetailModal'
@@ -10,6 +10,9 @@ export default function Transfers() {
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
+    const [isAdmin, setIsAdmin] = useState(false)
+    const [isReadOnly, setIsReadOnly] = useState(false)
+    const [editingTransfer, setEditingTransfer] = useState(null)
 
     // Toast state
     const [toast, setToast] = useState(null)
@@ -35,8 +38,21 @@ export default function Transfers() {
     }
 
     useEffect(() => {
+        checkUserRole()
         fetchTransfers()
     }, [])
+
+    async function checkUserRole() {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+            setIsAdmin(data?.role === 'Administrador')
+        }
+    }
+
+    const [userBranchIds, setUserBranchIds] = useState([])
+
+    // ... (existing state) ...
 
     async function fetchTransfers() {
         try {
@@ -59,14 +75,16 @@ export default function Transfers() {
                 `)
                 .order('created_at', { ascending: false })
 
+            // Fetch branches regardless of admin status to control UI buttons
+            const { data: assignments } = await supabase
+                .from('user_branches')
+                .select('branch_id')
+                .eq('user_id', user.id)
+
+            const assignedIds = assignments?.map(a => a.branch_id) || []
+            setUserBranchIds(assignedIds)
+
             if (!isUserAdmin) {
-                const { data: assignments } = await supabase
-                    .from('user_branches')
-                    .select('branch_id')
-                    .eq('user_id', user.id)
-
-                const assignedIds = assignments?.map(a => a.branch_id) || []
-
                 if (assignedIds.length > 0) {
                     // Filter where either origin or destination is in assigned branches
                     query = query.or(`origin_branch_id.in.(${assignedIds.join(',')}),destination_branch_id.in.(${assignedIds.join(',')})`)
@@ -105,16 +123,39 @@ export default function Transfers() {
             const { items, ...header } = transferData
             const { data: { user } } = await supabase.auth.getUser()
 
-            const { data: transfer, error: tError } = await supabase
-                .from('transfers')
-                .insert([{ ...header, sent_by: user?.id }])
-                .select()
-                .single()
+            let targetTransferId = null
 
-            if (tError) throw tError
+            if (editingTransfer) {
+                targetTransferId = editingTransfer.id
+                // Delete old items
+                const { error: delError } = await supabase
+                    .from('transfer_items')
+                    .delete()
+                    .eq('transfer_id', targetTransferId)
+                if (delError) throw delError
+
+                // Update header
+                const { error: upError } = await supabase
+                    .from('transfers')
+                    .update({
+                        origin_branch_id: header.origin_branch_id,
+                        destination_branch_id: header.destination_branch_id,
+                        // we keep status/sender/etc as they were or update if needed
+                    })
+                    .eq('id', targetTransferId)
+                if (upError) throw upError
+            } else {
+                const { data: transfer, error: tError } = await supabase
+                    .from('transfers')
+                    .insert([{ ...header, sent_by: user?.id }])
+                    .select()
+                    .single()
+                if (tError) throw tError
+                targetTransferId = transfer.id
+            }
 
             const itemsToSave = items.map(item => ({
-                transfer_id: transfer.id,
+                transfer_id: targetTransferId,
                 product_id: item.product_id,
                 quantity: item.quantity
             }))
@@ -126,13 +167,64 @@ export default function Transfers() {
             if (itemsError) throw itemsError
 
             setIsModalOpen(false)
+            setEditingTransfer(null)
             fetchTransfers()
-            showToast('Solicitud de traspaso creada con éxito.')
+            showToast(editingTransfer ? 'Traspaso actualizado correctamente.' : 'Solicitud de traspaso creada con éxito.')
         } catch (err) {
             console.error('Error saving transfer:', err)
-            showToast('Error al crear el traspaso: ' + err.message, 'error')
+            showToast('Error al procesar el traspaso: ' + err.message, 'error')
         } finally {
             setIsSaving(false)
+        }
+    }
+
+    const handleEdit = async (t, forceReadOnly = false) => {
+        try {
+            setLoading(true)
+            const { data: items, error } = await supabase
+                .from('transfer_items')
+                .select('*, products(name, sku)')
+                .eq('transfer_id', t.id)
+
+            if (error) throw error
+
+            const formattedItems = items.map(i => ({
+                product_id: i.product_id,
+                name: i.products?.name,
+                sku: i.products?.sku,
+                display_quantity: i.quantity,
+                unit_type: 'UNIDAD',
+                units_per_box: 1
+            }))
+
+            setEditingTransfer({
+                ...t,
+                items: formattedItems
+            })
+            setIsReadOnly(forceReadOnly || (!isAdmin && !t.can_edit))
+            setIsModalOpen(true)
+        } catch (err) {
+            console.error(err)
+            alert('Error al cargar detalles del traspaso')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    async function togglePermission(id, field, currentValue) {
+        try {
+            const { error } = await supabase
+                .from('transfers')
+                .update({ [field]: !currentValue })
+                .eq('id', id)
+
+            if (error) throw error
+
+            // Update local state
+            setTransfers(prev => prev.map(t => t.id === id ? { ...t, [field]: !currentValue } : t))
+        } catch (err) {
+            console.error('Error toggling permission:', err)
+            showToast('Error al actualizar permisos', 'error')
         }
     }
 
@@ -223,7 +315,12 @@ export default function Transfers() {
             {isModalOpen && (
                 <TransferModal
                     isSaving={isSaving}
-                    onClose={() => setIsModalOpen(false)}
+                    initialData={editingTransfer}
+                    readOnly={isReadOnly}
+                    onClose={() => {
+                        setIsModalOpen(false)
+                        setEditingTransfer(null)
+                    }}
                     onSave={handleSave}
                 />
             )}
@@ -340,9 +437,58 @@ export default function Transfers() {
                                         <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.85rem', color: 'hsl(var(--primary))', backgroundColor: 'hsl(var(--primary) / 0.08)', padding: '3px 8px', borderRadius: '6px' }}>
                                             #{t.transfer_number || t.id.slice(0, 8)}
                                         </span>
-                                        <div style={{ display: 'flex', gap: '0.35rem' }}>
+                                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                                            {/* Admin: Permissions Control */}
+                                            {isAdmin && (
+                                                <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.5rem', backgroundColor: 'white', padding: '2px', borderRadius: '8px', border: '1px solid hsl(var(--border) / 0.3)' }}>
+                                                    <button
+                                                        onClick={() => togglePermission(t.id, 'can_edit', t.can_edit)}
+                                                        title={t.can_edit ? "Bloquear Edición" : "Habilitar Edición"}
+                                                        style={{
+                                                            padding: '4px',
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            backgroundColor: t.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent',
+                                                            color: t.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Edit2 size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => togglePermission(t.id, 'can_void', t.can_void)}
+                                                        title={t.can_void ? "Bloquear Anulación" : "Habilitar Anulación"}
+                                                        style={{
+                                                            padding: '4px',
+                                                            borderRadius: '6px',
+                                                            border: 'none',
+                                                            backgroundColor: t.can_void ? 'hsl(var(--destructive) / 0.15)' : 'transparent',
+                                                            color: t.can_void ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             <button onClick={() => setViewingTransfer(t)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'white', color: 'hsl(var(--foreground))', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }} title="Ver Detalle"><Eye size={14} /></button>
-                                            <button onClick={() => handleDelete(t)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))', cursor: 'pointer' }} title="Eliminar"><Trash2 size={14} /></button>
+
+                                            {(isAdmin || t.can_edit) ? (
+                                                <button onClick={() => handleEdit(t, false)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--primary) / 0.05)', color: 'hsl(var(--primary))', cursor: 'pointer' }} title="Modificar"><Edit2 size={14} /></button>
+                                            ) : (
+                                                <button onClick={() => handleEdit(t, true)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--secondary) / 0.4)', color: 'hsl(var(--foreground) / 0.4)' }} title="Ver Lectura"><Edit2 size={14} opacity={0.5} /></button>
+                                            )}
+
+                                            {(isAdmin || t.can_void) && (
+                                                <button onClick={() => handleDelete(t)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))', cursor: 'pointer' }} title="Eliminar"><Trash2 size={14} /></button>
+                                            )}
                                         </div>
                                     </div>
                                     <div style={{
@@ -429,7 +575,8 @@ export default function Transfers() {
 
                                 {/* Action Bar */}
                                 <div style={{ padding: '1rem 1.5rem', display: 'flex', gap: '0.75rem' }}>
-                                    {t.status === 'Pendiente' && (
+                                    {/* Action: PROCESS SEND (Origin Branch Only) */}
+                                    {t.status === 'Pendiente' && (isAdmin || userBranchIds.includes(t.origin_branch_id)) && (
                                         <button
                                             className="btn btn-primary"
                                             style={{ flex: 1, borderRadius: '12px', padding: '0.7rem', fontWeight: '800', gap: '0.6rem', fontSize: '0.85rem' }}
@@ -439,7 +586,9 @@ export default function Transfers() {
                                             PROCESAR ENVÍO
                                         </button>
                                     )}
-                                    {t.status === 'Enviado' && (
+
+                                    {/* Action: CONFIRM RECEPTION (Destination Branch Only) */}
+                                    {t.status === 'Enviado' && (isAdmin || userBranchIds.includes(t.destination_branch_id)) && (
                                         <button
                                             className="btn"
                                             style={{ flex: 1, backgroundColor: 'hsl(142 76% 36%)', color: 'white', borderRadius: '12px', padding: '0.7rem', fontWeight: '800', gap: '0.6rem', fontSize: '0.85rem' }}
@@ -449,7 +598,9 @@ export default function Transfers() {
                                             CONFIRMAR RECEPCIÓN
                                         </button>
                                     )}
-                                    {(t.status === 'Pendiente' || t.status === 'Enviado') && (
+
+                                    {/* Action: CANCEL (Origin Branch Only) */}
+                                    {(t.status === 'Pendiente' || t.status === 'Enviado') && (isAdmin || userBranchIds.includes(t.origin_branch_id)) && (
                                         <button
                                             className="btn"
                                             style={{ borderRadius: '12px', padding: '0.7rem', width: '50px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }}

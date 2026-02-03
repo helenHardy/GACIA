@@ -12,6 +12,7 @@ export default function Sales() {
     const [searchTerm, setSearchTerm] = useState('')
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingSale, setEditingSale] = useState(null)
+    const [isReadOnly, setIsReadOnly] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [saleForTicket, setSaleForTicket] = useState(null)
@@ -235,7 +236,7 @@ export default function Sales() {
         }
     }
 
-    const handleEdit = async (sale) => {
+    const handleEdit = async (sale, forceReadOnly = false) => {
 
         try {
             setLoading(true)
@@ -250,6 +251,7 @@ export default function Sales() {
                 total: i.total
             }))
             setEditingSale({ ...sale, items: formattedItems })
+            setIsReadOnly(forceReadOnly || (!isAdmin && !sale.can_edit))
             setIsModalOpen(true)
         } catch (err) {
             console.error(err)
@@ -324,6 +326,23 @@ export default function Sales() {
         }
     }
 
+    async function togglePermission(saleId, field, currentValue) {
+        try {
+            const { error } = await supabase
+                .from('sales')
+                .update({ [field]: !currentValue })
+                .eq('id', saleId)
+
+            if (error) throw error
+
+            // Update local state instead of full re-fetch for better UX
+            setSales(prev => prev.map(s => s.id === saleId ? { ...s, [field]: !currentValue } : s))
+        } catch (err) {
+            console.error('Error toggling permission:', err)
+            alert('Error al actualizar permisos')
+        }
+    }
+
     const filteredSales = sales.filter(s => {
         const saleDate = new Date(s.created_at)
         const saleLocalDate = getLocalDate(s.created_at)
@@ -369,8 +388,9 @@ export default function Sales() {
                 <SaleModal
                     initialData={editingSale}
                     isSaving={isSaving}
+                    readOnly={isReadOnly}
                     currencySymbol={currencySymbol}
-                    onClose={() => { setIsModalOpen(false); setEditingSale(null); }}
+                    onClose={() => { setIsModalOpen(false); setEditingSale(null); setIsReadOnly(false); }}
                     onSave={handleSave}
                 />
             )}
@@ -615,11 +635,62 @@ export default function Sales() {
                                         <span style={{ fontSize: '1.1rem', fontWeight: '900', letterSpacing: '-0.02em' }}>{currencySymbol}{s.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                     </td>
                                     <td style={{ padding: '1.25rem', textAlign: 'right' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-                                            <button onClick={() => handlePrint(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--foreground))' }} title="Imprimir Ticket"><Printer size={18} /></button>
-                                            <button onClick={() => handleEdit(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Detalles"><Eye size={18} /></button>
-                                            <button onClick={() => handleVoid(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }} title="Anular"><Trash2 size={18} /></button>
+                                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>
+                                            {/* Admin: Unlock controls */}
+                                            {isAdmin && (
+                                                <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '4px', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.3)' }}>
+                                                    <button
+                                                        onClick={() => togglePermission(s.id, 'can_edit', s.can_edit)}
+                                                        className="btn-icon"
+                                                        title={s.can_edit ? "Bloquear Edición" : "Habilitar Edición"}
+                                                        style={{
+                                                            padding: '6px',
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            backgroundColor: s.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent',
+                                                            color: s.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Edit2 size={14} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => togglePermission(s.id, 'can_void', s.can_void)}
+                                                        className="btn-icon"
+                                                        title={s.can_void ? "Bloquear Anulación" : "Habilitar Anulación"}
+                                                        style={{
+                                                            padding: '6px',
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            backgroundColor: s.can_void ? 'hsl(var(--destructive) / 0.15)' : 'transparent',
+                                                            color: s.can_void ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            )}
 
+                                            <button onClick={() => handlePrint(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--foreground))' }} title="Imprimir Ticket"><Printer size={18} /></button>
+
+                                            {(isAdmin || s.can_edit) ? (
+                                                <button onClick={() => handleEdit(s, false)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Modificar"><Edit2 size={18} /></button>
+                                            ) : (
+                                                <button onClick={() => handleEdit(s, true)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.2)', color: 'hsl(var(--foreground) / 0.3)' }} title="Ver Detalles"><Eye size={18} /></button>
+                                            )}
+
+                                            {(isAdmin || s.can_void) && (
+                                                <button onClick={() => handleVoid(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }} title="Anular"><Trash2 size={18} /></button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

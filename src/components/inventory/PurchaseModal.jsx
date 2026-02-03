@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { X, Save, Plus, Trash2, Search, Loader2, AlertCircle, Truck, Building2, Package, ShoppingCart, Info, ChevronRight, Layers } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-export default function PurchaseModal({ onClose, onSave, isSaving, initialData, currencySymbol = 'Bs.' }) {
+export default function PurchaseModal({ onClose, onSave, isSaving, initialData, currencySymbol = 'Bs.', readOnly = false }) {
     const [suppliers, setSuppliers] = useState([])
     const [branches, setBranches] = useState([])
     const [products, setProducts] = useState([])
@@ -237,9 +237,10 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                 <div style={{ position: 'relative' }}>
                                     <Truck size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
                                     <select
-                                        style={{ ...inputStyle, paddingLeft: '2.5rem' }}
+                                        style={{ ...inputStyle, paddingLeft: '2.5rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--secondary) / 0.2)' }}
                                         value={selectedSupplier}
                                         onChange={(e) => setSelectedSupplier(e.target.value)}
+                                        disabled={readOnly}
                                         required
                                     >
                                         <option value="">Seleccione el proveedor encargado...</option>
@@ -254,9 +255,10 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                 <div style={{ position: 'relative' }}>
                                     <Building2 size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
                                     <select
-                                        style={{ ...inputStyle, paddingLeft: '2.5rem' }}
+                                        style={{ ...inputStyle, paddingLeft: '2.5rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--secondary) / 0.2)' }}
                                         value={selectedBranch}
                                         onChange={(e) => setSelectedBranch(e.target.value)}
+                                        disabled={readOnly}
                                         required
                                     >
                                         {branches.map(b => (
@@ -273,15 +275,17 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                 <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}><Package size={18} /> Detalle de Ítems</h3>
 
                                 <div style={{ position: 'relative' }}>
-                                    <button
-                                        type="button"
-                                        className="btn btn-primary shadow-sm"
-                                        onClick={() => setShowProductSearch(!showProductSearch)}
-                                        style={{ borderRadius: '10px', gap: '0.6rem', padding: '0.6rem 1.2rem', fontWeight: '700' }}
-                                    >
-                                        <Plus size={18} />
-                                        Agregar Producto
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary shadow-sm"
+                                            onClick={() => setShowProductSearch(!showProductSearch)}
+                                            style={{ borderRadius: '10px', gap: '0.6rem', padding: '0.6rem 1.2rem', fontWeight: '700' }}
+                                        >
+                                            <Plus size={18} />
+                                            Agregar Producto
+                                        </button>
+                                    )}
 
                                     {showProductSearch && (
                                         <div className="card shadow-2xl" style={{ position: 'absolute', right: 0, top: '100%', marginTop: '0.75rem', width: '400px', zIndex: 110, padding: 0, borderRadius: '16px', overflow: 'hidden' }}>
@@ -375,16 +379,16 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1rem' }}>
-                                                        <div style={{ display: 'flex', padding: '4px', backgroundColor: 'hsl(var(--secondary) / 0.3)', borderRadius: '8px', gap: '2px' }}>
+                                                        <div style={{ display: 'flex', padding: '4px', backgroundColor: 'hsl(var(--secondary) / 0.3)', borderRadius: '8px', gap: '2px', opacity: readOnly ? 0.7 : 1 }}>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => updateItem(item.product_id, 'is_pack', false)}
-                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: !item.is_pack ? 'hsl(var(--background))' : 'transparent', color: !item.is_pack ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))', boxShadow: !item.is_pack ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}
+                                                                onClick={() => !readOnly && updateItem(item.product_id, 'is_pack', false)}
+                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: readOnly ? 'default' : 'pointer', transition: 'all 0.2s', backgroundColor: !item.is_pack ? 'hsl(var(--background))' : 'transparent', color: !item.is_pack ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))', boxShadow: !item.is_pack ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}
                                                             >UId.</button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => updateItem(item.product_id, 'is_pack', true)}
-                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: item.is_pack ? 'hsl(var(--background))' : 'transparent', color: item.is_pack ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))', boxShadow: item.is_pack ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}
+                                                                onClick={() => !readOnly && updateItem(item.product_id, 'is_pack', true)}
+                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: readOnly ? 'default' : 'pointer', transition: 'all 0.2s', backgroundColor: item.is_pack ? 'hsl(var(--background))' : 'transparent', color: item.is_pack ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))', boxShadow: item.is_pack ? '0 2px 4px rgba(0,0,0,0.05)' : 'none' }}
                                                             >Caja</button>
                                                         </div>
                                                     </td>
@@ -393,8 +397,9 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                             type="number"
                                                             value={item.quantity}
                                                             onChange={(e) => updateItem(item.product_id, 'quantity', e.target.value)}
+                                                            disabled={readOnly}
                                                             className="form-input"
-                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: 'white' }}
+                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
                                                         />
                                                     </td>
                                                     <td style={{ padding: '1rem' }}>
@@ -403,8 +408,9 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                                 type="number"
                                                                 value={item.units_per_pack}
                                                                 onChange={(e) => updateItem(item.product_id, 'units_per_pack', e.target.value)}
+                                                                disabled={readOnly}
                                                                 className="form-input"
-                                                                style={{ ...inputStyle, textAlign: 'center', backgroundColor: 'white' }}
+                                                                style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
                                                             />
                                                         ) : (
                                                             <div style={{ textAlign: 'center', opacity: 0.2 }}>---</div>
@@ -418,8 +424,9 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                                 step="0.01"
                                                                 value={item.unit_cost}
                                                                 onChange={(e) => updateItem(item.product_id, 'unit_cost', e.target.value)}
+                                                                disabled={readOnly}
                                                                 className="form-input"
-                                                                style={{ ...inputStyle, textAlign: 'center', backgroundColor: 'white', paddingLeft: '1.4rem' }}
+                                                                style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white', paddingLeft: '1.4rem' }}
                                                             />
                                                         </div>
                                                     </td>
@@ -427,13 +434,15 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                         {currencySymbol}{item.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                                     </td>
                                                     <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeItem(item.product_id)}
-                                                            style={{ backgroundColor: 'hsl(var(--destructive) / 0.1)', border: 'none', color: 'hsl(var(--destructive))', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {!readOnly && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeItem(item.product_id)}
+                                                                style={{ backgroundColor: 'hsl(var(--destructive) / 0.1)', border: 'none', color: 'hsl(var(--destructive))', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))
@@ -457,18 +466,20 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                     <span style={{ fontSize: '1rem', fontWeight: '700', opacity: 0.5 }}>Subtotal de Compra:</span>
                                     <span style={{ fontSize: '1.8rem', fontWeight: '900', color: 'hsl(var(--foreground))' }}>{currencySymbol}{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                 </div>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary shadow-xl shadow-primary/20"
-                                    disabled={isSaving}
-                                    style={{ padding: '1rem', borderRadius: '14px', gap: '0.75rem', fontSize: '1rem', fontWeight: '800' }}
-                                >
-                                    {isSaving ? (
-                                        <><Loader2 size={24} className="animate-spin" /> PROCESANDO INGRESO...</>
-                                    ) : (
-                                        <><Save size={24} /> {initialData ? 'GUARDAR MODIFICACIONES' : 'PROCESAR INGRESO A STOCK'}</>
-                                    )}
-                                </button>
+                                {!readOnly && (
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary shadow-xl shadow-primary/20"
+                                        disabled={isSaving}
+                                        style={{ padding: '1rem', borderRadius: '14px', gap: '0.75rem', fontSize: '1rem', fontWeight: '800' }}
+                                    >
+                                        {isSaving ? (
+                                            <><Loader2 size={24} className="animate-spin" /> PROCESANDO INGRESO...</>
+                                        ) : (
+                                            <><Save size={24} /> {initialData ? 'GUARDAR MODIFICACIONES' : 'PROCESAR INGRESO A STOCK'}</>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </form>

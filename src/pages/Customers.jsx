@@ -342,124 +342,127 @@ export default function Customers() {
                         <p style={{ maxWidth: '400px', margin: '0 auto' }}>Registra tus clientes para habilitar ventas personalizadas, créditos y seguimiento de cuentas.</p>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.5rem' }}>
-                        {filteredCustomers.map(customer => (
-                            <div
-                                key={customer.id}
-                                className="card hover:shadow-lg transition-all"
-                                style={{
-                                    backgroundColor: 'white',
-                                    borderRadius: '20px',
-                                    border: '1px solid hsl(var(--border) / 0.5)',
-                                    overflow: 'hidden',
-                                    display: 'flex',
-                                    flexDirection: 'column'
-                                }}
-                            >
-                                {/* Card Header */}
-                                <div style={{ padding: '1.25rem', borderBottom: '1px solid hsl(var(--border) / 0.3)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                        <div style={{
-                                            width: '48px', height: '48px',
-                                            borderRadius: '14px',
-                                            backgroundColor: `hsl(${customer.active ? 'var(--primary)' : 'var(--muted)'} / 0.1)`,
-                                            color: customer.active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
-                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                            fontSize: '1.25rem', fontWeight: '800'
-                                        }}>
-                                            {customer.name.substring(0, 2).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '800', lineHeight: 1.2 }}>{customer.name}</h3>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                                                <span style={{ fontSize: '0.75rem', fontWeight: '600', opacity: 0.6 }}>ID: {customer.tax_id || 'N/A'}</span>
-                                                <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'hsl(var(--foreground) / 0.3)' }}></span>
-                                                <span style={{
-                                                    fontSize: '0.65rem', fontWeight: '700', padding: '0.15rem 0.5rem', borderRadius: '99px',
-                                                    backgroundColor: customer.active ? 'hsl(142 76% 36% / 0.1)' : 'hsl(0 0% 50% / 0.1)',
-                                                    color: customer.active ? 'hsl(142 76% 36%)' : 'hsl(0 0% 50%)'
+                    <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 0.5rem' }}>
+                            <thead>
+                                <tr style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.8rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    <th style={{ padding: '1rem', textAlign: 'left' }}>Cliente</th>
+                                    <th style={{ padding: '1rem', textAlign: 'left' }}>Identificación</th>
+                                    <th style={{ padding: '1rem', textAlign: 'left' }}>Estado</th>
+                                    <th style={{ padding: '1rem', textAlign: 'right' }}>Deuda</th>
+                                    <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredCustomers.map(customer => (
+                                    <tr
+                                        key={customer.id}
+                                        style={{
+                                            backgroundColor: 'white',
+                                            transition: 'all 0.2s',
+                                        }}
+                                        className="hover:bg-secondary/20"
+                                    >
+                                        <td style={{ padding: '1rem', borderTopLeftRadius: '12px', borderBottomLeftRadius: '12px', border: '1px solid hsl(var(--border) / 0.3)', borderRight: 'none' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                <div style={{
+                                                    width: '40px', height: '40px',
+                                                    borderRadius: '10px',
+                                                    backgroundColor: `hsl(${customer.active ? 'var(--primary)' : 'var(--muted)'} / 0.1)`,
+                                                    color: customer.active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: '1rem', fontWeight: '800'
                                                 }}>
-                                                    {customer.active ? 'ACTIVO' : 'INACTIVO'}
-                                                </span>
+                                                    {customer.name.substring(0, 2).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>{customer.name}</div>
+                                                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{customer.phone || 'Sin teléfono'}</div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                    <button onClick={(e) => { e.stopPropagation(); setEditingCustomer(customer); setIsModalOpen(true); }} style={{ padding: '0.5rem', borderRadius: '10px', color: 'hsl(var(--muted-foreground))', transition: 'all 0.2s' }} className="hover:bg-secondary hover:text-foreground">
-                                        <Edit2 size={18} />
-                                    </button>
-                                </div>
-
-                                {/* Card Body */}
-                                <div style={{ padding: '1.25rem', flex: 1 }}>
-                                    {/* Financial Stats */}
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                                        <div style={{ backgroundColor: 'hsl(var(--destructive) / 0.05)', padding: '0.75rem', borderRadius: '12px' }}>
-                                            <p style={{ fontSize: '0.7rem', fontWeight: '700', color: 'hsl(var(--destructive))', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Deuda Actual</p>
-                                            <p style={{ fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--destructive))', letterSpacing: '-0.03em' }}>
+                                        </td>
+                                        <td style={{ padding: '1rem', border: '1px solid hsl(var(--border) / 0.3)', borderLeft: 'none', borderRight: 'none' }}>
+                                            <span style={{ fontFamily: 'monospace', fontWeight: '600', opacity: 0.7 }}>{customer.tax_id || 'N/A'}</span>
+                                        </td>
+                                        <td style={{ padding: '1rem', border: '1px solid hsl(var(--border) / 0.3)', borderLeft: 'none', borderRight: 'none' }}>
+                                            <span style={{
+                                                fontSize: '0.65rem', fontWeight: '800', padding: '0.2rem 0.6rem', borderRadius: '99px',
+                                                backgroundColor: customer.active ? 'hsl(142 76% 36% / 0.1)' : 'hsl(0 0% 50% / 0.1)',
+                                                color: customer.active ? 'hsl(142 76% 36%)' : 'hsl(0 0% 50%)'
+                                            }}>
+                                                {customer.active ? 'ACTIVO' : 'INACTIVO'}
+                                            </span>
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right', border: '1px solid hsl(var(--border) / 0.3)', borderLeft: 'none', borderRight: 'none' }}>
+                                            <div style={{ fontWeight: '900', color: (customer.current_balance || 0) > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
                                                 ${(customer.current_balance || 0).toFixed(2)}
-                                            </p>
-                                        </div>
-                                        <div style={{ backgroundColor: 'hsl(var(--secondary) / 0.3)', padding: '0.75rem', borderRadius: '12px' }}>
-                                            <p style={{ fontSize: '0.7rem', fontWeight: '700', opacity: 0.6, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Disp. Crédito</p>
-                                            <p style={{ fontSize: '1.25rem', fontWeight: '900', opacity: 0.8, letterSpacing: '-0.03em' }}>
-                                                ${Math.max(0, (customer.credit_limit || 0) - (customer.current_balance || 0)).toFixed(2)}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {/* Contact Info */}
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.9rem', opacity: 0.8 }}>
-                                            <Phone size={16} style={{ opacity: 0.5 }} />
-                                            <span style={{ fontWeight: '500' }}>{customer.phone || 'Sin teléfono'}</span>
-                                        </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.9rem', opacity: 0.8 }}>
-                                            <MapPin size={16} style={{ opacity: 0.5 }} />
-                                            <span style={{ fontWeight: '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{customer.address || 'Sin dirección'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Card Footer */}
-                                <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid hsl(var(--border) / 0.3)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
-                                    <button
-                                        onClick={() => setPayingCustomer(customer)}
-                                        className="btn btn-primary"
-                                        style={{ width: '100%', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '700', padding: '0.6rem' }}
-                                    >
-                                        <HandCoins size={16} style={{ marginRight: '0.5rem' }} />
-                                        ABONAR
-                                    </button>
-                                    <button
-                                        onClick={() => setViewingLedgerCustomer(customer)}
-                                        className="btn bg-white border border-input shadow-sm hover:bg-secondary"
-                                        style={{ width: '100%', borderRadius: '10px', fontSize: '0.9rem', fontWeight: '700', padding: '0.6rem' }}
-                                    >
-                                        <TrendingUp size={16} style={{ marginRight: '0.5rem' }} />
-                                        HISTORIAL
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                                            </div>
+                                            <div style={{ fontSize: '0.65rem', opacity: 0.5 }}>Límite: ${(customer.credit_limit || 0).toFixed(2)}</div>
+                                        </td>
+                                        <td style={{ padding: '1rem', textAlign: 'right', borderTopRightRadius: '12px', borderBottomRightRadius: '12px', border: '1px solid hsl(var(--border) / 0.3)', borderLeft: 'none' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
+                                                <button
+                                                    onClick={() => setPayingCustomer(customer)}
+                                                    className="btn btn-primary"
+                                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px', fontWeight: '800' }}
+                                                    title="Abonar Pago"
+                                                >
+                                                    <HandCoins size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setViewingLedgerCustomer(customer)}
+                                                    className="btn"
+                                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px', backgroundColor: 'white', border: '1px solid hsl(var(--border))' }}
+                                                    title="Ver Historial"
+                                                >
+                                                    <TrendingUp size={14} />
+                                                </button>
+                                                <div style={{ width: '1px', height: '24px', backgroundColor: 'hsl(var(--border))', margin: '0 0.2rem' }}></div>
+                                                <button
+                                                    onClick={() => { setEditingCustomer(customer); setIsModalOpen(true); }}
+                                                    className="btn"
+                                                    style={{ padding: '0.4rem', color: 'hsl(var(--muted-foreground))' }}
+                                                    title="Editar"
+                                                >
+                                                    <Edit2 size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteId(customer.id)}
+                                                    className="btn"
+                                                    style={{ padding: '0.4rem', color: 'hsl(var(--destructive))' }}
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>
 
-            {payingCustomer && (
-                <CustomerPaymentsModal
-                    customer={payingCustomer}
-                    isSaving={isSaving}
-                    onClose={() => setPayingCustomer(null)}
-                    onSave={handleSavePayment}
-                />
-            )}
+            {
+                payingCustomer && (
+                    <CustomerPaymentsModal
+                        customer={payingCustomer}
+                        isSaving={isSaving}
+                        onClose={() => setPayingCustomer(null)}
+                        onSave={handleSavePayment}
+                    />
+                )
+            }
 
-            {viewingLedgerCustomer && (
-                <CustomerLedgerDrawer
-                    customer={viewingLedgerCustomer}
-                    onClose={() => setViewingLedgerCustomer(null)}
-                />
-            )}
+            {
+                viewingLedgerCustomer && (
+                    <CustomerLedgerDrawer
+                        customer={viewingLedgerCustomer}
+                        onClose={() => setViewingLedgerCustomer(null)}
+                    />
+                )
+            }
         </div>
     )
 }

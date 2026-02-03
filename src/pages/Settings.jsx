@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Building, Bell, Shield, Palette, Save, CheckCircle, Loader2, Moon, Sun, Lock, Key, Receipt } from 'lucide-react'
+import { Settings as SettingsIcon, Building, Bell, Shield, Palette, Save, CheckCircle, Loader2, Moon, Sun, Lock, Key, Receipt, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Settings() {
@@ -22,6 +22,12 @@ export default function Settings() {
         tax_name: 'IVA'
     })
 
+    // Roles and Permissions State
+    const [rolesList, setRolesList] = useState([])
+    const [permissionsMatrix, setPermissionsMatrix] = useState({}) // { roleName: { menuKey: true } }
+    const [newRole, setNewRole] = useState({ name: '', description: '' })
+    const [isSavingPermissions, setIsSavingPermissions] = useState(false)
+
     // Password State
     const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' })
     const [passwordError, setPasswordError] = useState(null)
@@ -29,7 +35,114 @@ export default function Settings() {
 
     useEffect(() => {
         fetchSettings()
+        fetchRolesAndPermissions()
     }, [])
+
+    async function fetchRolesAndPermissions() {
+        try {
+            const [rolesRes, permsRes] = await Promise.all([
+                supabase.from('roles').select('*').order('name'),
+                supabase.from('role_permissions').select('*')
+            ])
+
+            if (rolesRes.data) setRolesList(rolesRes.data)
+
+            if (permsRes.data) {
+                const matrix = {}
+                permsRes.data.forEach(p => {
+                    if (!matrix[p.role_name]) matrix[p.role_name] = {}
+                    matrix[p.role_name][p.menu_key] = true
+                })
+                setPermissionsMatrix(matrix)
+            }
+        } catch (err) {
+            console.error('Error fetching roles/permissions:', err)
+        }
+    }
+
+    const handleCreateRole = async (e) => {
+        e.preventDefault()
+        if (!newRole.name) return
+        try {
+            setIsSaving(true)
+            const { error } = await supabase.from('roles').insert([newRole])
+            if (error) throw error
+            setNewRole({ name: '', description: '' })
+            fetchRolesAndPermissions()
+        } catch (err) {
+            alert('Error al crear rol: ' + err.message)
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
+    const togglePermission = (roleName, menuKey) => {
+        setPermissionsMatrix(prev => ({
+            ...prev,
+            [roleName]: {
+                ...prev[roleName],
+                [menuKey]: !prev[roleName]?.[menuKey]
+            }
+        }))
+    }
+
+    const savePermissions = async () => {
+        try {
+            setIsSavingPermissions(true)
+
+            // 1. Eliminar todos los permisos actuales para reconstruir
+            // Nota: En una app real, podrías hacer un diff, pero el borrado/inserción es más simple para este caso.
+            const { error: deleteError } = await supabase
+                .from('role_permissions')
+                .delete()
+                .neq('id', '00000000-0000-0000-0000-000000000000') // Borrar todo
+
+            if (deleteError) throw deleteError
+
+            // 2. Preparar nuevas inserciones
+            const newPerms = []
+            Object.entries(permissionsMatrix).forEach(([roleName, keys]) => {
+                Object.entries(keys).forEach(([menuKey, isAllowed]) => {
+                    if (isAllowed) {
+                        newPerms.push({ role_name: roleName, menu_key: menuKey })
+                    }
+                })
+            })
+
+            if (newPerms.length > 0) {
+                const { error: insertError } = await supabase
+                    .from('role_permissions')
+                    .insert(newPerms)
+                if (insertError) throw insertError
+            }
+
+            setSaved(true)
+            setTimeout(() => setSaved(false), 3000)
+        } catch (err) {
+            alert('Error al guardar permisos: ' + err.message)
+        } finally {
+            setIsSavingPermissions(false)
+        }
+    }
+
+    const handleDeleteRole = async (roleName) => {
+        if (roleName === 'Administrador') {
+            alert('No se puede eliminar el rol de Administrador')
+            return
+        }
+        if (!confirm(`¿Estás seguro de eliminar el rol "${roleName}"?`)) return
+
+        try {
+            setIsSaving(true)
+            const { error } = await supabase.from('roles').delete().eq('name', roleName)
+            if (error) throw error
+            fetchRolesAndPermissions()
+        } catch (err) {
+            alert('Error al eliminar rol: ' + err.message)
+        } finally {
+            setIsSaving(false)
+        }
+    }
 
     useEffect(() => {
         // Apply theme whenever settings.theme changes
@@ -120,10 +233,28 @@ export default function Settings() {
     const tabs = [
         { id: 'general', label: 'General', icon: <SettingsIcon size={20} /> },
         { id: 'business', label: 'Empresa', icon: <Building size={20} /> },
+        { id: 'roles', label: 'Roles y Permisos', icon: <Shield size={20} /> },
         { id: 'billing', label: 'Facturación', icon: <Receipt size={20} /> },
         { id: 'notifications', label: 'Notificaciones', icon: <Bell size={20} /> },
         { id: 'security', label: 'Seguridad', icon: <Shield size={20} /> },
         { id: 'appearance', label: 'Apariencia', icon: <Palette size={20} /> },
+    ]
+
+    const menuKeys = [
+        { key: 'dashboard', label: 'Dashboard' },
+        { key: 'pos', label: 'Punto de Venta' },
+        { key: 'sales', label: 'Historial Ventas' },
+        { key: 'quotations', label: 'Cotizaciones' },
+        { key: 'inventory', label: 'Inventario' },
+        { key: 'branches', label: 'Sucursales' },
+        { key: 'suppliers', label: 'Proveedores' },
+        { key: 'purchases', label: 'Compras' },
+        { key: 'transfers', label: 'Traspasos' },
+        { key: 'reports', label: 'Reportes' },
+        { key: 'customers', label: 'Clientes' },
+        { key: 'users', label: 'Usuarios' },
+        { key: 'classifications', label: 'Clasificaciones' },
+        { key: 'settings', label: 'Configuración' },
     ]
 
     return (
@@ -167,6 +298,99 @@ export default function Settings() {
 
                 {/* Content Area */}
                 <div className="card" style={{ padding: '2rem', minHeight: '500px' }}>
+                    {activeTab === 'roles' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: '600' }}>Gestión de Roles</h3>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={savePermissions}
+                                    disabled={isSavingPermissions}
+                                >
+                                    {isSavingPermissions ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                    Guardar Cambios de Permisos
+                                </button>
+                            </div>
+
+                            {/* Create Role Form */}
+                            <form onSubmit={handleCreateRole} className="card" style={{ padding: '1.5rem', backgroundColor: 'hsl(var(--muted)/0.3)', border: '1px solid hsl(var(--border))' }}>
+                                <h4 style={{ fontWeight: '600', marginBottom: '1rem' }}>Crear Nuevo Rol</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'flex-end' }}>
+                                    <div>
+                                        <label style={{ fontSize: '0.875rem', fontWeight: '500', display: 'block', marginBottom: '0.4rem' }}>Nombre del Rol</label>
+                                        <input
+                                            type="text"
+                                            className="btn"
+                                            style={{ width: '100%', justifyContent: 'flex-start', backgroundColor: 'white', cursor: 'text' }}
+                                            placeholder="Ej: Supervisor"
+                                            value={newRole.name}
+                                            onChange={(e) => setNewRole({ ...newRole, name: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: '0.875rem', fontWeight: '500', display: 'block', marginBottom: '0.4rem' }}>Descripción</label>
+                                        <input
+                                            type="text"
+                                            className="btn"
+                                            style={{ width: '100%', justifyContent: 'flex-start', backgroundColor: 'white', cursor: 'text' }}
+                                            placeholder="Breve descripción de responsabilidades"
+                                            value={newRole.description}
+                                            onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
+                                        />
+                                    </div>
+                                    <button type="submit" className="btn btn-primary">Crear</button>
+                                </div>
+                            </form>
+
+                            {/* Permissions Matrix */}
+                            <div style={{ overflowX: 'auto', border: '1px solid hsl(var(--border))', borderRadius: '12px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: 'hsl(var(--muted)/0.5)' }}>
+                                            <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', borderBottom: '1px solid hsl(var(--border))' }}>
+                                                Módulo / Menú
+                                            </th>
+                                            {rolesList.map(role => (
+                                                <th key={role.id} style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', borderBottom: '1px solid hsl(var(--border))', textAlign: 'center' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span>{role.name}</span>
+                                                        {role.name !== 'Administrador' && (
+                                                            <button
+                                                                onClick={() => handleDeleteRole(role.name)}
+                                                                style={{ color: 'hsl(var(--destructive))', background: 'none', border: 'none', cursor: 'pointer' }}
+                                                                title="Eliminar Rol"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {menuKeys.map(menu => (
+                                            <tr key={menu.key} style={{ borderBottom: '1px solid hsl(var(--border)/0.5)' }}>
+                                                <td style={{ padding: '1rem', fontWeight: '500' }}>{menu.label}</td>
+                                                {rolesList.map(role => (
+                                                    <td key={role.name} style={{ padding: '1rem', textAlign: 'center' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={role.name === 'Administrador' || !!permissionsMatrix[role.name]?.[menu.key]}
+                                                            onChange={() => role.name !== 'Administrador' && togglePermission(role.name, menu.key)}
+                                                            disabled={role.name === 'Administrador'}
+                                                            style={{ width: '18px', height: '18px', cursor: role.name === 'Administrador' ? 'not-allowed' : 'pointer' }}
+                                                        />
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                     {activeTab === 'general' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>Configuración General</h3>

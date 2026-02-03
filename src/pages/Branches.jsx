@@ -148,12 +148,19 @@ export default function Branches() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <div style={{
-                                            padding: '0.5rem',
+                                            width: '48px', height: '48px',
                                             borderRadius: 'var(--radius)',
                                             backgroundColor: 'hsl(var(--secondary))',
-                                            color: 'hsl(var(--foreground))'
+                                            color: 'hsl(var(--foreground))',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            overflow: 'hidden',
+                                            border: '1px solid hsl(var(--border) / 0.5)'
                                         }}>
-                                            <Building2 size={24} />
+                                            {branch.logo_url ? (
+                                                <img src={branch.logo_url} alt={branch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : (
+                                                <Building2 size={24} style={{ opacity: 0.5 }} />
+                                            )}
                                         </div>
                                         <div>
                                             <h3 style={{ fontSize: '1.125rem', fontWeight: '600' }}>{branch.name}</h3>

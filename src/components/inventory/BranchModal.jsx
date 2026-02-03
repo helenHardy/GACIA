@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react'
-import { X, Save, AlertCircle, Loader2 } from 'lucide-react'
+import { X, Save, AlertCircle, Loader2, UploadCloud } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export default function BranchModal({ branch, onClose, onSave, isSaving }) {
     const [formData, setFormData] = useState({
         name: '',
         address: '',
         phone: '',
-        active: true
+        active: true,
+        logo_url: ''
     })
     const [error, setError] = useState(null)
+    const [uploading, setUploading] = useState(false)
 
     useEffect(() => {
         if (branch) {
@@ -17,7 +20,8 @@ export default function BranchModal({ branch, onClose, onSave, isSaving }) {
                 name: branch.name || '',
                 address: branch.address || '',
                 phone: branch.phone || '',
-                active: branch.active ?? true
+                active: branch.active ?? true,
+                logo_url: branch.logo_url || ''
             })
         }
     }, [branch?.id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -28,6 +32,35 @@ export default function BranchModal({ branch, onClose, onSave, isSaving }) {
             ...prev,
             [name]: type === 'checkbox' ? checked : value
         }))
+    }
+
+    const handleImageUpload = async (e) => {
+        try {
+            const file = e.target.files[0]
+            if (!file) return
+
+            setUploading(true)
+            const fileExt = file.name.split('.').pop()
+            const fileName = `${Math.random()}.${fileExt}`
+            const filePath = `branches/${fileName}`
+
+            const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(filePath, file)
+
+            if (uploadError) throw uploadError
+
+            const { data } = supabase.storage
+                .from('product-images')
+                .getPublicUrl(filePath)
+
+            setFormData(prev => ({ ...prev, logo_url: data.publicUrl }))
+        } catch (error) {
+            console.error('Error uploading image:', error)
+            setError('Error al subir la imagen')
+        } finally {
+            setUploading(false)
+        }
     }
 
     const handleSubmit = (e) => {
@@ -70,6 +103,39 @@ export default function BranchModal({ branch, onClose, onSave, isSaving }) {
                 )}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        <label style={{ fontSize: '0.875rem', fontWeight: '500' }}>Logotipo</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{
+                                width: '64px', height: '64px',
+                                borderRadius: '12px',
+                                backgroundColor: 'hsl(var(--secondary))',
+                                border: '1px dashed hsl(var(--border))',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                overflow: 'hidden',
+                                flexShrink: 0
+                            }}>
+                                {formData.logo_url ? (
+                                    <img src={formData.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                    <UploadCloud size={24} style={{ opacity: 0.3 }} />
+                                )}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageUpload}
+                                    style={{ fontSize: '0.875rem' }}
+                                    disabled={uploading || isSaving}
+                                />
+                                <p style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.25rem' }}>
+                                    {uploading ? 'Subiendo...' : 'Recomendado: 200x200px (PNG, JPG)'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <label style={{ fontSize: '0.875rem', fontWeight: '500' }}>Nombre de la Sucursal</label>
                         <input
@@ -122,7 +188,7 @@ export default function BranchModal({ branch, onClose, onSave, isSaving }) {
                     <button
                         type="submit"
                         className="btn btn-primary"
-                        disabled={isSaving}
+                        disabled={isSaving || uploading}
                         style={{ marginTop: '0.5rem', width: '100%', gap: '0.5rem' }}
                     >
                         {isSaving ? (

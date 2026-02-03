@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { X, Save, Plus, Trash2, Search, Loader2, AlertCircle, ArrowRight, Building2, Package, MapPin, ChevronRight, Info, ArrowLeftRight, Box } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-export default function TransferModal({ onClose, onSave, isSaving }) {
+export default function TransferModal({ onClose, onSave, isSaving, initialData = null, readOnly = false }) {
     const [branches, setBranches] = useState([])
     const [products, setProducts] = useState([])
     const [branchStock, setBranchStock] = useState({})
-    const [originBranch, setOriginBranch] = useState('')
-    const [destBranch, setDestBranch] = useState('')
-    const [items, setItems] = useState([])
+    const [originBranch, setOriginBranch] = useState(initialData?.origin_branch_id || '')
+    const [destBranch, setDestBranch] = useState(initialData?.destination_branch_id || '')
+    const [items, setItems] = useState(initialData?.items || [])
     const [searchTerm, setSearchTerm] = useState('')
     const [showProductSearch, setShowProductSearch] = useState(false)
     const [error, setError] = useState(null)
@@ -46,7 +46,7 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
             setBranches(availableBranches)
             setProducts(productsRes.data || [])
 
-            if (availableBranches.length > 0) {
+            if (!initialData && availableBranches.length > 0) {
                 setOriginBranch(availableBranches[0].id)
                 if (availableBranches.length > 1) {
                     setDestBranch(availableBranches[1].id)
@@ -239,7 +239,7 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                         </div>
                         <div>
                             <h2 style={{ fontSize: '1.4rem', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>
-                                Nuevo Traspaso Local
+                                {initialData ? (readOnly ? 'Detalles del Traspaso' : 'Modificar Traspaso') : 'Nuevo Traspaso Local'}
                             </h2>
                             <p style={{ fontSize: '0.8rem', fontWeight: '500', opacity: 0.5, margin: 0 }}>Mueva mercadería entre sus puntos de venta</p>
                         </div>
@@ -267,9 +267,10 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                     <label style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.6 }}>Origen del Stock</label>
                                 </div>
                                 <select
-                                    style={{ ...inputStyle, cursor: 'pointer', fontWeight: '700' }}
+                                    style={{ ...inputStyle, cursor: readOnly ? 'default' : 'pointer', fontWeight: '700', backgroundColor: readOnly ? 'transparent' : 'hsl(var(--secondary) / 0.2)' }}
                                     value={originBranch}
                                     onChange={(e) => setOriginBranch(e.target.value)}
+                                    disabled={readOnly}
                                     required
                                 >
                                     {branches.map(b => (
@@ -300,9 +301,10 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                     <label style={{ fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.6 }}>Destino de la Mercadería</label>
                                 </div>
                                 <select
-                                    style={{ ...inputStyle, cursor: 'pointer', fontWeight: '700' }}
+                                    style={{ ...inputStyle, cursor: readOnly ? 'default' : 'pointer', fontWeight: '700', backgroundColor: readOnly ? 'transparent' : 'hsl(var(--secondary) / 0.2)' }}
                                     value={destBranch}
                                     onChange={(e) => setDestBranch(e.target.value)}
+                                    disabled={readOnly}
                                     required
                                 >
                                     {branches.map(b => (
@@ -318,15 +320,17 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                 <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}><Package size={18} /> Productos a Trasladar</h3>
 
                                 <div style={{ position: 'relative' }}>
-                                    <button
-                                        type="button"
-                                        className="btn btn-primary shadow-sm"
-                                        onClick={() => setShowProductSearch(!showProductSearch)}
-                                        style={{ borderRadius: '10px', gap: '0.6rem', padding: '0.6rem 1.2rem', fontWeight: '700' }}
-                                    >
-                                        <Plus size={18} />
-                                        Agregar Producto
-                                    </button>
+                                    {!readOnly && (
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary shadow-sm"
+                                            onClick={() => setShowProductSearch(!showProductSearch)}
+                                            style={{ borderRadius: '10px', gap: '0.6rem', padding: '0.6rem 1.2rem', fontWeight: '700' }}
+                                        >
+                                            <Plus size={18} />
+                                            Agregar Producto
+                                        </button>
+                                    )}
 
                                     {showProductSearch && (
                                         <div className="card shadow-2xl" style={{ position: 'absolute', right: 0, top: '100%', marginTop: '0.75rem', width: '400px', zIndex: 110, padding: 0, borderRadius: '16px', overflow: 'hidden' }}>
@@ -415,16 +419,16 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1rem' }}>
-                                                        <div style={{ display: 'flex', padding: '4px', backgroundColor: 'hsl(var(--secondary) / 0.3)', borderRadius: '8px', gap: '2px' }}>
+                                                        <div style={{ display: 'flex', padding: '4px', backgroundColor: 'hsl(var(--secondary) / 0.3)', borderRadius: '8px', gap: '2px', opacity: readOnly ? 0.6 : 1 }}>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => updateItem(item.product_id, 'unit_type', 'UNIDAD')}
-                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: item.unit_type === 'UNIDAD' ? 'hsl(var(--background))' : 'transparent', color: item.unit_type === 'UNIDAD' ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))' }}
+                                                                onClick={() => !readOnly && updateItem(item.product_id, 'unit_type', 'UNIDAD')}
+                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: readOnly ? 'default' : 'pointer', transition: 'all 0.2s', backgroundColor: item.unit_type === 'UNIDAD' ? 'hsl(var(--background))' : 'transparent', color: item.unit_type === 'UNIDAD' ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))' }}
                                                             >UId.</button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => updateItem(item.product_id, 'unit_type', 'CAJA')}
-                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', backgroundColor: item.unit_type === 'CAJA' ? 'hsl(var(--background))' : 'transparent', color: item.unit_type === 'CAJA' ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))' }}
+                                                                onClick={() => !readOnly && updateItem(item.product_id, 'unit_type', 'CAJA')}
+                                                                style={{ flex: 1, padding: '4px', border: 'none', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: readOnly ? 'default' : 'pointer', transition: 'all 0.2s', backgroundColor: item.unit_type === 'CAJA' ? 'hsl(var(--background))' : 'transparent', color: item.unit_type === 'CAJA' ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground))' }}
                                                             >Caja</button>
                                                         </div>
                                                     </td>
@@ -433,8 +437,9 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                                             type="number"
                                                             value={item.display_quantity}
                                                             onChange={(e) => updateItem(item.product_id, 'display_quantity', e.target.value)}
+                                                            disabled={readOnly}
                                                             className="form-input"
-                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: 'white' }}
+                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
                                                         />
                                                     </td>
                                                     <td style={{ padding: '1rem' }}>
@@ -443,8 +448,9 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                                                 type="number"
                                                                 value={item.units_per_box}
                                                                 onChange={(e) => updateItem(item.product_id, 'units_per_box', e.target.value)}
+                                                                disabled={readOnly}
                                                                 className="form-input"
-                                                                style={{ ...inputStyle, textAlign: 'center', backgroundColor: 'white' }}
+                                                                style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
                                                             />
                                                         ) : (
                                                             <div style={{ textAlign: 'center', opacity: 0.2 }}>---</div>
@@ -454,13 +460,15 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                                         {item.display_quantity * item.units_per_box} uds.
                                                     </td>
                                                     <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => removeItem(item.product_id)}
-                                                            style={{ backgroundColor: 'hsl(var(--destructive) / 0.1)', border: 'none', color: 'hsl(var(--destructive))', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        {!readOnly && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeItem(item.product_id)}
+                                                                style={{ backgroundColor: 'hsl(var(--destructive) / 0.1)', border: 'none', color: 'hsl(var(--destructive))', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer' }}
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))
@@ -484,18 +492,20 @@ export default function TransferModal({ onClose, onSave, isSaving }) {
                                     <span style={{ fontSize: '1rem', fontWeight: '700', opacity: 0.5 }}>Total a Trasladar:</span>
                                     <span style={{ fontSize: '1.8rem', fontWeight: '900', color: 'hsl(var(--foreground))' }}>{totalUnits} <span style={{ fontSize: '1rem', opacity: 0.5 }}>unidades</span></span>
                                 </div>
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary shadow-xl shadow-primary/20"
-                                    disabled={isSaving}
-                                    style={{ padding: '1rem', borderRadius: '14px', gap: '0.75rem', fontSize: '1rem', fontWeight: '800' }}
-                                >
-                                    {isSaving ? (
-                                        <><Loader2 size={24} className="animate-spin" /> PROCESANDO SOLICITUD...</>
-                                    ) : (
-                                        <><Save size={24} /> CREAR SOLICITUD DE TRASPASO</>
-                                    )}
-                                </button>
+                                {!readOnly && (
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary shadow-xl shadow-primary/20"
+                                        disabled={isSaving}
+                                        style={{ padding: '1rem', borderRadius: '14px', gap: '0.75rem', fontSize: '1rem', fontWeight: '800' }}
+                                    >
+                                        {isSaving ? (
+                                            <><Loader2 size={24} className="animate-spin" /> PROCESANDO SOLICITUD...</>
+                                        ) : (
+                                            <><Save size={24} /> {initialData ? 'GUARDAR MODIFICACIONES' : 'CREAR SOLICITUD DE TRASPASO'}</>
+                                        )}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     </form>
