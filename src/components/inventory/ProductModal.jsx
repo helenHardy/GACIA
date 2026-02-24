@@ -3,7 +3,7 @@ import { X, Save, AlertCircle, Loader2, Building2, Plus, Image as ImageIcon, Tra
 import { supabase } from '../../lib/supabase'
 import { inventoryService } from '../../services/inventoryService'
 
-export default function ProductModal({ product, onClose, onSave, isSaving, currencySymbol = 'Bs.' }) {
+export default function ProductModal({ product, onClose, onSave, isSaving, currencySymbol = 'Bs.', readOnly = false }) {
     const [formData, setFormData] = useState({
         name: '',
         sku: '',
@@ -376,12 +376,14 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                 <p style={{ fontSize: '0.75rem', fontWeight: '500', opacity: 0.5 }}>Arrastra o haz clic para subir</p>
                                             </div>
                                         )}
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleImageUpload}
-                                            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                                        />
+                                        {!readOnly && (
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleImageUpload}
+                                                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                                            />
+                                        )}
                                         {uploadingImage && (
                                             <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                 <Loader2 size={32} className="animate-spin" style={{ color: 'hsl(var(--primary))' }} />
@@ -402,7 +404,8 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             onChange={handleChange}
                                             placeholder="Ej: Camiseta Deportiva Pro"
                                             className="form-input"
-                                            style={inputStyle}
+                                            style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
+                                            readOnly={readOnly}
                                             required
                                         />
                                     </div>
@@ -432,7 +435,8 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                     value={formData.price}
                                                     onChange={handleChange}
                                                     placeholder="0.00"
-                                                    style={{ ...inputStyle, paddingLeft: currencySymbol.length > 2 ? '3.2rem' : '1.8rem' }}
+                                                    style={{ ...inputStyle, paddingLeft: currencySymbol.length > 2 ? '3.2rem' : '1.8rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
+                                                    readOnly={readOnly}
                                                 />
                                             </div>
                                         </div>
@@ -445,7 +449,8 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             value={formData.description}
                                             onChange={handleChange}
                                             placeholder="Detalles sobre materiales, dimensiones, uso..."
-                                            style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }}
+                                            style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
+                                            readOnly={readOnly}
                                         />
                                     </div>
                                 </div>
@@ -457,7 +462,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                 <div style={inputWrapperStyle}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <label style={labelStyle}><Layers size={14} style={{ marginRight: 4 }} /> Categoría</label>
-                                        <button type="button" onClick={() => setIsAddingCategory(true)} style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+ Nueva</button>
+                                        {!readOnly && <button type="button" onClick={() => setIsAddingCategory(true)} style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+ Nueva</button>}
                                     </div>
                                     {isAddingCategory ? (
                                         <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -466,7 +471,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             <button type="button" onClick={() => setIsAddingCategory(false)} className="btn btn-secondary" style={{ padding: '0 0.5rem' }}><X size={16} /></button>
                                         </div>
                                     ) : (
-                                        <select name="category_id" value={formData.category_id} onChange={handleChange} style={inputStyle}>
+                                        <select name="category_id" value={formData.category_id} onChange={handleChange} disabled={readOnly} style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}>
                                             <option value="">Seleccionar...</option>
                                             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         </select>
@@ -476,7 +481,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                 <div style={inputWrapperStyle}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <label style={labelStyle}><Tag size={14} style={{ marginRight: 4 }} /> Marca</label>
-                                        <button type="button" onClick={() => setIsAddingBrand(true)} style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+ Nueva</button>
+                                        {!readOnly && <button type="button" onClick={() => setIsAddingBrand(true)} style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+ Nueva</button>}
                                     </div>
                                     {isAddingBrand ? (
                                         <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -485,7 +490,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             <button type="button" onClick={() => setIsAddingBrand(false)} className="btn btn-secondary" style={{ padding: '0 0.5rem' }}><X size={16} /></button>
                                         </div>
                                     ) : (
-                                        <select name="brand_id" value={formData.brand_id} onChange={handleBrandChange} style={inputStyle}>
+                                        <select name="brand_id" value={formData.brand_id} onChange={handleBrandChange} disabled={readOnly} style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}>
                                             <option value="">Seleccionar...</option>
                                             {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
@@ -495,7 +500,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                 <div style={inputWrapperStyle}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <label style={labelStyle}><Layers size={14} style={{ marginRight: 4 }} /> Modelo</label>
-                                        <button type="button" onClick={() => setIsAddingModel(true)} disabled={!formData.brand_id} style={{ fontSize: '0.7rem', color: formData.brand_id ? 'hsl(var(--primary))' : 'gray', border: 'none', background: 'none', cursor: formData.brand_id ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}>+ Nuevo</button>
+                                        {!readOnly && <button type="button" onClick={() => setIsAddingModel(true)} disabled={!formData.brand_id} style={{ fontSize: '0.7rem', color: formData.brand_id ? 'hsl(var(--primary))' : 'gray', border: 'none', background: 'none', cursor: formData.brand_id ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}>+ Nuevo</button>}
                                     </div>
                                     {isAddingModel ? (
                                         <div style={{ display: 'flex', gap: '0.25rem' }}>
@@ -504,7 +509,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             <button type="button" onClick={() => setIsAddingModel(false)} className="btn btn-secondary" style={{ padding: '0 0.5rem' }}><X size={16} /></button>
                                         </div>
                                     ) : (
-                                        <select name="model_id" value={formData.model_id} onChange={handleChange} disabled={!formData.brand_id} style={{ ...inputStyle, opacity: !formData.brand_id ? 0.6 : 1 }}>
+                                        <select name="model_id" value={formData.model_id} onChange={handleChange} disabled={!formData.brand_id || readOnly} style={{ ...inputStyle, opacity: (!formData.brand_id || readOnly) ? 0.6 : 1, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}>
                                             <option value="">{formData.brand_id ? 'Seleccionar...' : 'Elija Marca primero'}</option>
                                             {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                         </select>
@@ -523,9 +528,10 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             id="manage_batches"
                                             checked={formData.manage_batches || false}
                                             onChange={(e) => setFormData(prev => ({ ...prev, manage_batches: e.target.checked }))}
-                                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                                            disabled={readOnly}
+                                            style={{ width: '16px', height: '16px', cursor: readOnly ? 'default' : 'pointer' }}
                                         />
-                                        <label htmlFor="manage_batches" style={{ fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}>Usar Lotes/Vencimientos</label>
+                                        <label htmlFor="manage_batches" style={{ fontSize: '0.75rem', fontWeight: '600', cursor: readOnly ? 'default' : 'pointer' }}>Usar Lotes/Vencimientos</label>
                                     </div>
                                 </div>
 
@@ -551,11 +557,11 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                     </div>
                                                     <div style={inputWrapperStyle}>
                                                         <label style={labelStyle}>Mínimo</label>
-                                                        <input type="number" value={s.min_stock} onChange={(e) => handleBranchSettingChange(s.branch_id, 'min_stock', e.target.value)} style={{ ...inputStyle, textAlign: 'center' }} />
+                                                        <input type="number" value={s.min_stock} onChange={(e) => handleBranchSettingChange(s.branch_id, 'min_stock', e.target.value)} readOnly={readOnly} style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }} />
                                                     </div>
                                                     <div style={inputWrapperStyle}>
                                                         <label style={labelStyle}>Precio ({currencySymbol})</label>
-                                                        <input type="number" step="0.01" placeholder="Base" value={s.price || ''} onChange={(e) => handleBranchSettingChange(s.branch_id, 'price', e.target.value)} style={{ ...inputStyle, textAlign: 'center' }} />
+                                                        <input type="number" step="0.01" placeholder="Base" value={s.price || ''} onChange={(e) => handleBranchSettingChange(s.branch_id, 'price', e.target.value)} readOnly={readOnly} style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }} />
                                                     </div>
                                                 </div>
                                             </div>
@@ -583,24 +589,26 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                             >
                                 Cancelar
                             </button>
-                            <button
-                                type="submit"
-                                className="btn btn-primary"
-                                disabled={isSaving}
-                                style={{ padding: '0.75rem 3rem', fontWeight: '700', minWidth: '200px', display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'center' }}
-                            >
-                                {isSaving ? (
-                                    <>
-                                        <Loader2 size={18} className="animate-spin" />
-                                        Guardando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save size={18} />
-                                        {product ? 'Guardar Cambios' : 'Crear Producto'}
-                                    </>
-                                )}
-                            </button>
+                            {!readOnly && (
+                                <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={isSaving}
+                                    style={{ padding: '0.75rem 3rem', fontWeight: '700', minWidth: '200px', display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'center' }}
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 size={18} className="animate-spin" />
+                                            Guardando...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Save size={18} />
+                                            {product ? 'Guardar Cambios' : 'Crear Producto'}
+                                        </>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </form>
                 </div>

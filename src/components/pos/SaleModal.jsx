@@ -122,7 +122,7 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', flex: 1, overflow: 'hidden' }}>
                         {/* Sidebar: Header Info */}
-                        <div style={{ padding: '2.5rem', borderRight: '1px solid hsl(var(--border) / 0.4)', backgroundColor: 'hsl(var(--secondary) / 0.05)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                        <div className="no-scrollbar" style={{ padding: '1.5rem', borderRight: '1px solid hsl(var(--border) / 0.4)', backgroundColor: 'hsl(var(--secondary) / 0.05)', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto' }}>
                             <div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, marginBottom: '0.75rem' }}>
                                     <User size={14} /> Cliente
@@ -170,7 +170,7 @@ export default function SaleModal({ onClose, onSave, isSaving, initialData, curr
                                 </div>
                             </div>
 
-                            <div style={{ marginTop: 'auto', padding: '1.5rem', backgroundColor: 'hsl(var(--primary) / 0.05)', borderRadius: '20px', border: '1px solid hsl(var(--primary) / 0.1)' }}>
+                            <div style={{ marginTop: 'auto', padding: '1.25rem', backgroundColor: 'hsl(var(--primary) / 0.05)', borderRadius: '16px', border: '1px solid hsl(var(--primary) / 0.1)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'hsl(var(--primary))', marginBottom: '1rem' }}>
                                     <Calculator size={20} />
                                     <span style={{ fontWeight: '800', fontSize: '0.8rem', textTransform: 'uppercase' }}>Resumen</span>

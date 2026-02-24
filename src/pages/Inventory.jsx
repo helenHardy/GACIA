@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle } from 'lucide-react'
+import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle, Eye, Tag, Layers } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { inventoryService } from '../services/inventoryService'
 import ProductModal from '../components/inventory/ProductModal'
 import KardexDrawer from '../components/inventory/KardexDrawer'
 
@@ -9,10 +10,17 @@ export default function Inventory() {
     const [branches, setBranches] = useState([])
     const [selectedBranchId, setSelectedBranchId] = useState('all')
     const [isAdmin, setIsAdmin] = useState(false)
+    const [isReadOnly, setIsReadOnly] = useState(false)
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
+    const [categories, setCategories] = useState([])
+    const [brands, setBrands] = useState([])
+    const [models, setModels] = useState([])
+    const [selectedCategoryId, setSelectedCategoryId] = useState('')
+    const [selectedBrandId, setSelectedBrandId] = useState('')
+    const [selectedModelId, setSelectedModelId] = useState('')
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
 
     // UI state
@@ -39,7 +47,23 @@ export default function Inventory() {
         checkUserRole()
         fetchBranches()
         fetchSettings()
+        fetchFilterOptions()
     }, [])
+
+    async function fetchFilterOptions() {
+        try {
+            const [cats, brs, mods] = await Promise.all([
+                inventoryService.getCategories(),
+                inventoryService.getBrands(),
+                inventoryService.getModels()
+            ])
+            setCategories(cats || [])
+            setBrands(brs || [])
+            setModels(mods || [])
+        } catch (err) {
+            console.error('Error fetching filter options:', err)
+        }
+    }
 
     async function checkUserRole() {
         const { data: { user } } = await supabase.auth.getUser()
@@ -240,6 +264,23 @@ export default function Inventory() {
         }
     }
 
+    async function togglePermission(productId, field, currentValue) {
+        try {
+            const { error } = await supabase
+                .from('products')
+                .update({ [field]: !currentValue })
+                .eq('id', productId)
+
+            if (error) throw error
+
+            // Update local state
+            setProducts(prev => prev.map(p => p.id === productId ? { ...p, [field]: !currentValue } : p))
+        } catch (err) {
+            console.error('Error toggling permission:', err)
+            showToast('Error al actualizar permisos', 'error')
+        }
+    }
+
     const confirmDelete = async () => {
         if (!deleteId) return
         try {
@@ -258,10 +299,14 @@ export default function Inventory() {
         }
     }
 
-    const filteredProducts = products.filter(p =>
-        (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    )
+    const filteredProducts = products
+        .filter(p =>
+            (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+            (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+        )
+        .filter(p => !selectedCategoryId || p.category_id === selectedCategoryId)
+        .filter(p => !selectedBrandId || p.brand_id === selectedBrandId)
+        .filter(p => !selectedModelId || p.model_id === selectedModelId)
 
     return (
         <div style={{ position: 'relative', paddingBottom: '2rem' }}>
@@ -318,9 +363,11 @@ export default function Inventory() {
                     product={editingProduct}
                     isSaving={isSaving}
                     currencySymbol={currencySymbol}
+                    readOnly={isReadOnly}
                     onClose={() => {
                         setIsModalOpen(false)
                         setEditingProduct(null)
+                        setIsReadOnly(false)
                     }}
                     onSave={handleSave}
                 />
@@ -382,24 +429,80 @@ export default function Inventory() {
                     />
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Building2 size={20} style={{ color: 'hsl(var(--secondary-foreground))' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
+                    <Building2 size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
                     <select
                         disabled={branches.length <= 1 && !isAdmin}
-                        style={{ backgroundColor: 'hsl(var(--secondary))', border: 'none', cursor: 'pointer' }}
+                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
                         value={selectedBranchId}
                         onChange={(e) => setSelectedBranchId(e.target.value)}
                     >
-                        {isAdmin && <option value="all">Ver Todas (Stock Global)</option>}
+                        {isAdmin && <option value="all">Stock Global</option>}
                         {branches.map(b => (
                             <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
                     </select>
                 </div>
 
-                <button className="btn" style={{ backgroundColor: 'hsl(var(--secondary))' }}>
-                    <Filter size={20} style={{ marginRight: '0.5rem' }} />
-                    Filtros
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
+                    <Layers size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
+                    <select
+                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
+                        value={selectedCategoryId}
+                        onChange={(e) => setSelectedCategoryId(e.target.value)}
+                    >
+                        <option value="">Categoría: Todas</option>
+                        {categories.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
+                    <Tag size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
+                    <select
+                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
+                        value={selectedBrandId}
+                        onChange={(e) => {
+                            setSelectedBrandId(e.target.value)
+                            setSelectedModelId('')
+                        }}
+                    >
+                        <option value="">Marca: Todas</option>
+                        {brands.map(b => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
+                    <Layers size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
+                    <select
+                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
+                        value={selectedModelId}
+                        onChange={(e) => setSelectedModelId(e.target.value)}
+                        disabled={!selectedBrandId}
+                    >
+                        <option value="">Modelo: Todos</option>
+                        {(selectedBrandId ? models.filter(m => m.brand_id === selectedBrandId) : models).map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </select>
+                </div>
+
+                <button
+                    className="btn"
+                    style={{ backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.8rem', borderRadius: '10px' }}
+                    onClick={() => {
+                        setSelectedCategoryId('')
+                        setSelectedBrandId('')
+                        setSelectedModelId('')
+                        setSearchTerm('')
+                        if (isAdmin) setSelectedBranchId('all')
+                    }}
+                    title="Limpiar Filtros"
+                >
+                    <RefreshCw size={16} />
                 </button>
             </div>
 
@@ -442,7 +545,7 @@ export default function Inventory() {
                     <tbody>
                         {filteredProducts.length === 0 && !loading ? (
                             <tr>
-                                <td colSpan="6" style={{ padding: '3rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))' }}>
+                                <td colSpan="7" style={{ padding: '3rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))' }}>
                                     <Package size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
                                     <p>No se encontraron productos.</p>
                                 </td>
@@ -519,7 +622,51 @@ export default function Inventory() {
                                         </span>
                                     </td>
                                     <td style={{ padding: '1rem', textAlign: 'right' }}>
-                                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                                            {/* Admin: Permissions Control */}
+                                            {isAdmin && (
+                                                <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '4px', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.3)' }}>
+                                                    <button
+                                                        onClick={() => togglePermission(product.id, 'can_edit', product.can_edit)}
+                                                        className="btn-icon"
+                                                        title={product.can_edit ? "Bloquear Edición" : "Habilitar Edición"}
+                                                        style={{
+                                                            padding: '6px',
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            backgroundColor: product.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent',
+                                                            color: product.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Edit2 size={14} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => togglePermission(product.id, 'can_delete', product.can_delete)}
+                                                        className="btn-icon"
+                                                        title={product.can_delete ? "Bloquear Eliminación" : "Habilitar Eliminación"}
+                                                        style={{
+                                                            padding: '6px',
+                                                            borderRadius: '8px',
+                                                            border: 'none',
+                                                            backgroundColor: product.can_delete ? 'hsl(var(--destructive) / 0.15)' : 'transparent',
+                                                            color: product.can_delete ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            )}
+
                                             <button
                                                 className="btn"
                                                 style={{ padding: '0.5rem', color: 'hsl(var(--primary))' }}
@@ -528,23 +675,45 @@ export default function Inventory() {
                                             >
                                                 <History size={16} />
                                             </button>
-                                            <button
-                                                className="btn"
-                                                style={{ padding: '0.5rem', color: 'hsl(var(--secondary-foreground))' }}
-                                                onClick={() => {
-                                                    setEditingProduct(product)
-                                                    setIsModalOpen(true)
-                                                }}
-                                            >
-                                                <Edit2 size={16} />
-                                            </button>
-                                            <button
-                                                className="btn"
-                                                style={{ padding: '0.5rem', color: 'hsl(var(--destructive))' }}
-                                                onClick={() => setDeleteId(product.id)}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
+
+                                            {(isAdmin || product.can_edit) ? (
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '0.5rem', color: 'hsl(var(--primary))' }}
+                                                    onClick={() => {
+                                                        setEditingProduct(product)
+                                                        setIsReadOnly(false)
+                                                        setIsModalOpen(true)
+                                                    }}
+                                                    title="Modificar"
+                                                >
+                                                    <Edit2 size={16} />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '0.5rem', color: 'hsl(var(--secondary-foreground) / 0.5)' }}
+                                                    onClick={() => {
+                                                        setEditingProduct(product)
+                                                        setIsReadOnly(true)
+                                                        setIsModalOpen(true)
+                                                    }}
+                                                    title="Ver Detalles"
+                                                >
+                                                    <Eye size={16} />
+                                                </button>
+                                            )}
+
+                                            {(isAdmin || product.can_delete) && (
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '0.5rem', color: 'hsl(var(--destructive))' }}
+                                                    onClick={() => setDeleteId(product.id)}
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

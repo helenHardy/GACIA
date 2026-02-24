@@ -259,7 +259,7 @@ export default function Purchases() {
     }
 
     const filteredPurchases = purchases.filter(p =>
-        p.suppliers?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.suppliers?.name || 'Sin Proveedor').toLowerCase().includes(searchTerm.toLowerCase()) ||
         p.purchase_number?.toString().includes(searchTerm) ||
         p.id.toString().includes(searchTerm)
     )
@@ -419,7 +419,7 @@ export default function Purchases() {
                                                 <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'hsl(var(--secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                                     <Truck size={14} />
                                                 </div>
-                                                <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>{p.suppliers?.name || 'Desconocido'}</span>
+                                                <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>{p.suppliers?.name || 'Sin Proveedor'}</span>
                                             </div>
                                         </td>
                                         <td style={{ padding: '1.25rem 1.5rem' }}>

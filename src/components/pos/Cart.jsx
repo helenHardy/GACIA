@@ -15,7 +15,7 @@ export default function Cart({ items, onRemove, onUpdateQuantity, currencySymbol
     }
 
     return (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {items.map(item => (
                 <div
                     key={item.id}

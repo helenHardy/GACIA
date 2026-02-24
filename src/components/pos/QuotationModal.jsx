@@ -155,7 +155,7 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
-            <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '1000px', height: '90vh', display: 'flex', flexDirection: 'column', padding: 0, borderRadius: '24px', overflow: 'hidden', backgroundColor: 'hsl(var(--background))' }}>
+            <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '1280px', height: '92vh', display: 'flex', flexDirection: 'column', padding: 0, borderRadius: '24px', overflow: 'hidden', backgroundColor: 'hsl(var(--background))' }}>
 
                 {/* Header */}
                 <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid hsl(var(--border) / 0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
@@ -173,9 +173,9 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                     <button onClick={onClose} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}><X size={20} /></button>
                 </div>
 
-                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1.2fr 1fr', overflow: 'hidden' }}>
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 400px', overflow: 'hidden' }}>
                     {/* Left side: Items & Selection */}
-                    <div style={{ padding: '2rem', borderRight: '1px solid hsl(var(--border) / 0.5)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    <div className="no-scrollbar" style={{ padding: '1.5rem 2rem', borderRight: '1px solid hsl(var(--border) / 0.5)', overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
 
                         {/* Product Search */}
                         <div style={{ position: 'relative' }}>
@@ -277,7 +277,7 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                     </div>
 
                     {/* Right side: Customer & Summary */}
-                    <div style={{ padding: '2rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', display: 'flex', flexDirection: 'column', gap: '1.5rem', overflowY: 'auto' }}>
+                    <div className="no-scrollbar" style={{ padding: '1.5rem 2rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto', overflowX: 'hidden' }}>
 
                         {/* Customer Section */}
                         <div style={{ position: 'relative' }}>

@@ -1,12 +1,15 @@
 :root {
   /* Brand Colors - Modern & Premium */
-  --primary: 220 60% 50%; /* Deep Blue */
+  --primary: 220 60% 50%;
+  /* Deep Blue */
   --primary-foreground: 210 40% 98%;
-  
-  --secondary: 210 20% 96%; /* Light Gray for backgrounds */
+
+  --secondary: 210 20% 96%;
+  /* Light Gray for backgrounds */
   --secondary-foreground: 222 47% 11%;
 
-  --accent: 262 83% 58%; /* Purple accent for "wow" factor */
+  --accent: 262 83% 58%;
+  /* Purple accent for "wow" factor */
   --accent-foreground: 210 40% 98%;
 
   --destructive: 0 84% 60%;
@@ -23,7 +26,7 @@
   --ring: 222 84% 4.9%;
 
   --radius: 0.5rem;
-  
+
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 }
@@ -31,16 +34,16 @@
 .dark {
   --background: 222 47% 11%;
   --foreground: 210 40% 98%;
-  
+
   --card: 217 33% 17%;
   --card-foreground: 210 40% 98%;
-  
+
   --primary: 217 91% 60%;
   --primary-foreground: 222 47% 11%;
-  
+
   --secondary: 217 33% 17%;
   --secondary-foreground: 210 40% 98%;
-  
+
   --border: 217 33% 17%;
   --input: 217 33% 17%;
 }
@@ -49,12 +52,31 @@
   border-color: hsl(var(--border));
 }
 
+html,
 body {
   font-family: var(--font-sans);
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   margin: 0;
   -webkit-font-smoothing: antialiased;
+  /* Hide scrollbars but keep functionality */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Global utility to hide scrollbars in any element */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Utilities */

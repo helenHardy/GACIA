@@ -31,7 +31,13 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                 const [suppliersRes, branchesRes, productsRes] = await Promise.all([
                     supabase.from('suppliers').select('*').order('name'),
                     supabase.from('branches').select('*').eq('active', true).order('name'),
-                    supabase.from('products').select('*, categories(name)').order('name')
+                    supabase.from('products').select(`
+                        *,
+                        category:categories(name),
+                        brand:brands(name),
+                        model:models(name),
+                        product_branch_settings(stock, branch_id)
+                    `).order('name')
                 ])
 
                 setSuppliers(suppliersRes.data || [])
@@ -62,7 +68,9 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                 product_id: product.id,
                 name: product.name,
                 sku: product.sku,
-                category_name: product.categories?.name,
+                category_name: product.category?.name,
+                brand_name: product.brand?.name,
+                model_name: product.model?.name,
                 quantity: 1,
                 unit_cost: product.price || 0,
                 total: product.price || 0,
@@ -100,7 +108,6 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
 
     const handleSubmit = (e) => {
         e.preventDefault()
-        if (!selectedSupplier) return setError('Seleccione un proveedor para continuar.')
         if (!selectedBranch) return setError('Seleccione la sucursal de destino.')
         if (items.length === 0) return setError('Debe agregar al menos un producto a la compra.')
 
@@ -116,7 +123,7 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
         })
 
         onSave({
-            supplier_id: selectedSupplier,
+            supplier_id: selectedSupplier || null,
             branch_id: selectedBranch,
             total,
             items: processedItems
@@ -125,7 +132,7 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
 
     const filteredProducts = products.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+        (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
     )
 
     // Styles
@@ -241,9 +248,8 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                         value={selectedSupplier}
                                         onChange={(e) => setSelectedSupplier(e.target.value)}
                                         disabled={readOnly}
-                                        required
                                     >
-                                        <option value="">Seleccione el proveedor encargado...</option>
+                                        <option value="">(Opcional) Seleccione el proveedor...</option>
                                         {suppliers.map(s => (
                                             <option key={s.id} value={s.id}>{s.name} {s.nit ? `(${s.nit})` : ''}</option>
                                         ))}
@@ -288,7 +294,7 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                     )}
 
                                     {showProductSearch && (
-                                        <div className="card shadow-2xl" style={{ position: 'absolute', right: 0, top: '100%', marginTop: '0.75rem', width: '400px', zIndex: 110, padding: 0, borderRadius: '16px', overflow: 'hidden' }}>
+                                        <div className="card shadow-2xl" style={{ position: 'absolute', right: 0, top: '100%', marginTop: '0.75rem', width: '550px', zIndex: 110, padding: 0, borderRadius: '16px', overflow: 'hidden' }}>
                                             <div style={{ padding: '0.75rem', borderBottom: '1px solid hsl(var(--border) / 0.5)', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
                                                 <div style={{ position: 'relative' }}>
                                                     <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
@@ -303,30 +309,86 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                     />
                                                 </div>
                                             </div>
-                                            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                                            <div style={{ maxHeight: '400px', overflowY: 'auto', backgroundColor: 'hsl(var(--background))' }}>
                                                 {filteredProducts.length === 0 ? (
-                                                    <div style={{ padding: '2rem', textAlign: 'center', opacity: 0.5 }}>No se encontraron productos</div>
+                                                    <div style={{ padding: '3rem', textAlign: 'center', opacity: 0.5 }}>
+                                                        <Search size={32} style={{ margin: '0 auto 1rem', display: 'block' }} />
+                                                        <p style={{ fontSize: '0.9rem', fontWeight: '600' }}>No se encontraron productos</p>
+                                                    </div>
                                                 ) : (
-                                                    filteredProducts.map(p => (
-                                                        <button
-                                                            key={p.id}
-                                                            type="button"
-                                                            className="btn"
-                                                            style={{ width: '100%', justifyContent: 'flex-start', padding: '0.85rem 1rem', border: 'none', borderBottom: '1px solid hsl(var(--border) / 0.3)', borderRadius: 0 }}
-                                                            onClick={() => addItem(p)}
-                                                        >
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
-                                                                <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: 'hsl(var(--primary) / 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--primary))' }}>
-                                                                    <Package size={18} />
+                                                    filteredProducts.map(p => {
+                                                        const branchSettings = p.product_branch_settings?.find(s => s.branch_id === selectedBranch)
+                                                        const currentStock = branchSettings ? branchSettings.stock : 0
+
+                                                        return (
+                                                            <button
+                                                                key={p.id}
+                                                                type="button"
+                                                                className="btn search-item"
+                                                                style={{
+                                                                    width: '100%',
+                                                                    justifyContent: 'flex-start',
+                                                                    padding: '1rem',
+                                                                    border: 'none',
+                                                                    borderBottom: '1px solid hsl(var(--border) / 0.3)',
+                                                                    borderRadius: 0,
+                                                                    transition: 'all 0.2s',
+                                                                    display: 'block',
+                                                                    textAlign: 'left',
+                                                                    backgroundColor: 'transparent'
+                                                                }}
+                                                                onClick={() => addItem(p)}
+                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.05)'}
+                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                            >
+                                                                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                                                    <div style={{
+                                                                        width: '50px',
+                                                                        height: '50px',
+                                                                        borderRadius: '10px',
+                                                                        backgroundColor: 'hsl(var(--secondary) / 0.5)',
+                                                                        display: 'flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        backgroundImage: p.image_url ? `url(${p.image_url})` : 'none',
+                                                                        backgroundSize: 'cover',
+                                                                        backgroundPosition: 'center',
+                                                                        color: 'hsl(var(--primary))'
+                                                                    }}>
+                                                                        {!p.image_url && <Package size={24} />}
+                                                                    </div>
+
+                                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.25rem', gap: '1rem' }}>
+                                                                            <p style={{ fontWeight: '800', fontSize: '0.95rem', margin: 0, lineHeight: '1.2' }}>{p.name}</p>
+                                                                            <span style={{
+                                                                                fontSize: '0.7rem',
+                                                                                fontWeight: '800',
+                                                                                padding: '2px 8px',
+                                                                                borderRadius: '6px',
+                                                                                backgroundColor: currentStock > 0 ? 'hsl(var(--primary) / 0.1)' : 'hsl(var(--destructive) / 0.1)',
+                                                                                color: currentStock > 0 ? 'hsl(var(--primary))' : 'hsl(var(--destructive))',
+                                                                                whiteSpace: 'nowrap'
+                                                                            }}>
+                                                                                Stock: {currentStock}
+                                                                            </span>
+                                                                        </div>
+
+                                                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                                            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'hsl(var(--secondary-foreground) / 0.7)' }}>SKU: {p.sku || '---'}</span>
+                                                                            <span style={{ fontSize: '1rem', opacity: 0.2 }}>|</span>
+                                                                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                                                                                <span style={{ fontSize: '0.65rem', padding: '1px 6px', backgroundColor: 'hsl(var(--secondary))', borderRadius: '4px', fontWeight: '600' }}>{p.category?.name || 'Gral.'}</span>
+                                                                                {p.brand?.name && <span style={{ fontSize: '0.65rem', padding: '1px 6px', backgroundColor: 'hsl(var(--secondary))', borderRadius: '4px', fontWeight: '600' }}>{p.brand.name}</span>}
+                                                                                {p.model?.name && <span style={{ fontSize: '0.65rem', padding: '1px 6px', backgroundColor: 'hsl(var(--secondary))', borderRadius: '4px', fontWeight: '600' }}>{p.model.name}</span>}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <ChevronRight size={18} style={{ opacity: 0.3 }} />
                                                                 </div>
-                                                                <div style={{ textAlign: 'left', flex: 1 }}>
-                                                                    <p style={{ fontWeight: '700', fontSize: '0.85rem', margin: 0 }}>{p.name}</p>
-                                                                    <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>SKU: {p.sku || '---'} • {p.categories?.name || 'Gral.'}</span>
-                                                                </div>
-                                                                <ChevronRight size={14} opacity={0.3} />
-                                                            </div>
-                                                        </button>
-                                                    ))
+                                                            </button>
+                                                        )
+                                                    })
                                                 )}
                                             </div>
                                         </div>

@@ -237,33 +237,50 @@ declare
     v_origin_stock numeric;
     v_dest_stock numeric;
 begin
-    -- Cuando el traspaso se marca como 'Recibido'
-    if new.status = 'Recibido' and (old.status is null or old.status != 'Recibido') then
+    -- CASO 1: Envío procesado (Pendiente -> Enviado)
+    -- Se descuenta de origen inmediatamente para que el stock en tránsito no sea vendible.
+    if new.status = 'Enviado' and (old.status = 'Pendiente' or old.status is null) then
         for t_item in select * from public.transfer_items where transfer_id = new.id loop
-            -- 1. Origen: Descontar stock y registrar salida
             v_origin_stock := public.update_branch_stock(t_item.product_id, new.origin_branch_id, -t_item.quantity);
             
             insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)
             values (new.origin_branch_id, t_item.product_id, 'TRASPASO_SALIDA', -t_item.quantity, v_origin_stock, new.id::text, 
-                   'Transferencia a ' || (select name from public.branches where id = new.destination_branch_id));
+                   'Envío de transferencia a ' || (select name from public.branches where id = new.destination_branch_id));
+        end loop;
 
-            -- 2. Destino: Sumar stock y registrar entrada
+    -- CASO 2: Recepción confirmada (Enviado -> Recibido)
+    -- Se suma al destino.
+    elsif new.status = 'Recibido' and old.status = 'Enviado' then
+        for t_item in select * from public.transfer_items where transfer_id = new.id loop
             v_dest_stock := public.update_branch_stock(t_item.product_id, new.destination_branch_id, t_item.quantity);
             
             insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)
             values (new.destination_branch_id, t_item.product_id, 'TRASPASO_ENTRADA', t_item.quantity, v_dest_stock, new.id::text, 
-                   'Transferencia desde ' || (select name from public.branches where id = new.origin_branch_id));
+                   'Recepción de transferencia desde ' || (select name from public.branches where id = new.origin_branch_id));
         end loop;
-        
-    -- Cuando se ANULA/ELIMINA un traspaso que YA estaba recibido (Poco común, pero por seguridad)
-    elsif (new.status = 'Cancelado' and old.status = 'Recibido') then
-         for t_item in select * from public.transfer_items where transfer_id = new.id loop
-            -- Revertir: Sumar en origen, restar en destino
+
+    -- CASO 3: Cancelación de envío (Enviado -> Cancelado)
+    -- Se devuelve el stock al origen.
+    elsif new.status = 'Cancelado' and old.status = 'Enviado' then
+        for t_item in select * from public.transfer_items where transfer_id = new.id loop
             v_origin_stock := public.update_branch_stock(t_item.product_id, new.origin_branch_id, t_item.quantity);
-            v_dest_stock := public.update_branch_stock(t_item.product_id, new.destination_branch_id, -t_item.quantity);
             
             insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)
-            values (new.origin_branch_id, t_item.product_id, 'TRASPASO_REVERSION', t_item.quantity, v_origin_stock, new.id::text, 'Reversión traspaso cancelado');
+            values (new.origin_branch_id, t_item.product_id, 'TRASPASO_CANCELADO', t_item.quantity, v_origin_stock, new.id::text, 'Retorno stock por traspaso cancelado');
+        end loop;
+
+    -- CASO Especial: Recepción directa (Pendiente -> Recibido) 
+    -- Se hace todo el movimiento (Poco común pero posible vía API/SQL)
+    elsif new.status = 'Recibido' and (old.status = 'Pendiente' or old.status is null) then
+         for t_item in select * from public.transfer_items where transfer_id = new.id loop
+            v_origin_stock := public.update_branch_stock(t_item.product_id, new.origin_branch_id, -t_item.quantity);
+            v_dest_stock := public.update_branch_stock(t_item.product_id, new.destination_branch_id, t_item.quantity);
+            
+            insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)
+            values (new.origin_branch_id, t_item.product_id, 'TRASPASO_SALIDA', -t_item.quantity, v_origin_stock, new.id::text, 'Traspaso rápido (salida)');
+            
+             insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)
+            values (new.destination_branch_id, t_item.product_id, 'TRASPASO_ENTRADA', t_item.quantity, v_dest_stock, new.id::text, 'Traspaso rápido (entrada)');
         end loop;
     end if;
     

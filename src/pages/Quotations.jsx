@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import QuotationModal from '../components/pos/QuotationModal'
+import CheckoutModal from '../components/pos/CheckoutModal'
 
 export default function Quotations() {
     const [quotations, setQuotations] = useState([])
@@ -32,6 +33,8 @@ export default function Quotations() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingQuotation, setEditingQuotation] = useState(null)
     const [isSaving, setIsSaving] = useState(false)
+    const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+    const [convertingQuotation, setConvertingQuotation] = useState(null)
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [branches, setBranches] = useState([])
     const [filterBranchId, setFilterBranchId] = useState('all')
@@ -174,11 +177,15 @@ export default function Quotations() {
         }
     }
 
-    const handleConvert = async (quotation) => {
-        if (!confirm('¿Deseas convertir esta cotización en una venta real? Se registrará la transacción y se descontará del stock.')) return
+    const handleConvert = (quotation) => {
+        setConvertingQuotation(quotation)
+        setIsCheckoutOpen(true)
+    }
 
+    const handleConfirmConversion = async (paymentData) => {
         try {
-            setLoading(true)
+            setIsSaving(true)
+            const quotation = convertingQuotation
 
             // 1. Fetch items
             const { data: qItems, error: itemsFetchErr } = await supabase
@@ -196,16 +203,17 @@ export default function Quotations() {
             const { data: sale, error: saleErr } = await supabase
                 .from('sales')
                 .insert([{
-                    customer_id: quotation.customer_id,
+                    customer_id: paymentData.customerId || quotation.customer_id,
                     branch_id: quotation.branch_id,
                     user_id: user.id,
                     subtotal: quotation.subtotal,
-                    discount: quotation.discount || 0,
+                    discount: (quotation.discount || 0) + (paymentData.discount || 0),
                     tax: quotation.tax || 0,
-                    total: quotation.total,
-                    payment_method: 'Efectivo',
-                    amount_received: quotation.total,
-                    amount_change: 0
+                    total: quotation.total - (paymentData.discount || 0),
+                    payment_method: paymentData.paymentMethod,
+                    amount_received: paymentData.amountPaid,
+                    amount_change: paymentData.change,
+                    is_credit: paymentData.isCredit
                 }])
                 .select().single()
 
@@ -232,13 +240,15 @@ export default function Quotations() {
 
             if (updateErr) throw updateErr
 
+            setIsCheckoutOpen(false)
+            setConvertingQuotation(null)
             alert('¡Conversión exitosa! La cotización ahora es una venta.')
             fetchQuotations()
         } catch (err) {
             console.error('Error in conversion:', err)
             alert('Error al convertir: ' + err.message)
         } finally {
-            setLoading(false)
+            setIsSaving(false)
         }
     }
 
@@ -452,6 +462,21 @@ export default function Quotations() {
                     currencySymbol={currencySymbol}
                     onClose={() => { setIsModalOpen(false); setEditingQuotation(null); }}
                     onSave={handleSave}
+                />
+            )}
+
+            {isCheckoutOpen && convertingQuotation && (
+                <CheckoutModal
+                    total={convertingQuotation.total}
+                    currencySymbol={currencySymbol}
+                    isProcessing={isSaving}
+                    initialCustomer={convertingQuotation.customers ? {
+                        id: convertingQuotation.customer_id,
+                        name: convertingQuotation.customers.name,
+                        tax_id: convertingQuotation.customers.tax_id
+                    } : null}
+                    onClose={() => { setIsCheckoutOpen(false); setConvertingQuotation(null); }}
+                    onConfirm={handleConfirmConversion}
                 />
             )}
 

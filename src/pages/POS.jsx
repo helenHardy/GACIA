@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Search, ShoppingCart, Trash2, Wallet, Banknote, QrCode, Building2, Printer, CheckCircle, X, Tag, ChevronRight, Layers, LayoutGrid, RefreshCw } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, Wallet, Banknote, QrCode, Building2, Printer, CheckCircle, X, Tag, ChevronRight, Layers, LayoutGrid, RefreshCw, ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import ProductGrid from '../components/pos/ProductGrid'
 import Cart from '../components/pos/Cart'
@@ -21,6 +21,7 @@ export default function POS() {
     const [taxSettings, setTaxSettings] = useState({ enable_tax: true, tax_rate: 13, tax_name: 'IVA' })
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [gridRefreshKey, setGridRefreshKey] = useState(0)
+    const [viewMode, setViewMode] = useState('list') // 'grid' or 'list'
     const ticketRef = useRef()
 
     useEffect(() => {
@@ -177,7 +178,14 @@ export default function POS() {
     const total = taxSettings.enable_tax ? (subtotal * (1 + (taxSettings.tax_rate / 100))) : subtotal
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: '1.5rem', height: 'calc(100vh - 80px)', overflow: 'hidden' }}>
+        <div className="no-scrollbar" style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 420px',
+            gap: '1.5rem',
+            minHeight: '100vh',
+            padding: '1rem',
+            alignItems: 'start'
+        }}>
             {isCheckoutOpen && (
                 <CheckoutModal
                     total={total}
@@ -208,7 +216,7 @@ export default function POS() {
             )}
 
             {/* Catalog Section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 <div className="card shadow-sm" style={{ padding: '1.25rem', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid hsl(var(--border) / 0.6)' }}>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
@@ -231,6 +239,48 @@ export default function POS() {
                                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
                         </div>
+
+                        <div style={{ display: 'flex', gap: '2px', backgroundColor: 'hsl(var(--secondary) / 0.4)', padding: '4px', borderRadius: '12px' }}>
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className="btn-icon"
+                                title="Vista de Lista"
+                                style={{
+                                    padding: '6px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'list' ? 'hsl(var(--background))' : 'transparent',
+                                    color: viewMode === 'list' ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.4)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: viewMode === 'list' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                <ClipboardList size={20} />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('grid')}
+                                className="btn-icon"
+                                title="Vista de Cuadrícula"
+                                style={{
+                                    padding: '6px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: viewMode === 'grid' ? 'hsl(var(--background))' : 'transparent',
+                                    color: viewMode === 'grid' ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.4)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: viewMode === 'grid' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                <LayoutGrid size={20} />
+                            </button>
+                        </div>
+
                         <button
                             onClick={() => setGridRefreshKey(prev => prev + 1)}
                             className="btn"
@@ -241,7 +291,7 @@ export default function POS() {
                         </button>
                     </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', scrollbarWidth: 'none' }}>
+                    <div className="no-scrollbar" style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', scrollbarWidth: 'none' }}>
                         {categories.map(cat => (
                             <button
                                 key={cat}
@@ -269,7 +319,7 @@ export default function POS() {
                     </div>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.25rem' }}>
+                <div className="no-scrollbar" style={{ paddingRight: '0.5rem' }}>
                     <ProductGrid
                         searchTerm={searchTerm}
                         branchId={selectedBranchId}
@@ -277,12 +327,24 @@ export default function POS() {
                         onAddToCart={addToCart}
                         currencySymbol={currencySymbol}
                         refreshKey={gridRefreshKey}
+                        viewMode={viewMode}
                     />
                 </div>
             </div>
 
-            {/* Sidebar Cart */}
-            <div className="card shadow-md" style={{ display: 'flex', flexDirection: 'column', padding: 0, borderRadius: '24px', overflow: 'hidden', border: '1px solid hsl(var(--border) / 0.6)', backgroundColor: 'hsl(var(--background))' }}>
+            {/* Sidebar Cart - Sticky */}
+            <div className="card shadow-md no-scrollbar" style={{
+                display: 'flex',
+                flexDirection: 'column',
+                padding: 0,
+                borderRadius: '24px',
+                overflow: 'hidden',
+                border: '1px solid hsl(var(--border) / 0.6)',
+                backgroundColor: 'hsl(var(--background))',
+                position: 'sticky',
+                top: '1rem',
+                maxHeight: 'calc(100vh - 2rem)'
+            }}>
                 <div style={{ padding: '1.5rem', borderBottom: '1px solid hsl(var(--border) / 0.4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}><ShoppingCart size={20} /></div>
@@ -291,7 +353,7 @@ export default function POS() {
                     <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: 'hsl(var(--primary))', color: 'white', padding: '4px 10px', borderRadius: '99px' }}>{cart.length} ITEMS</span>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto' }}>
+                <div className="no-scrollbar" style={{ flex: 1, overflowY: 'scroll', paddingRight: '0.25rem' }}>
                     <Cart items={cart} onRemove={removeFromCart} onUpdateQuantity={updateQuantity} currencySymbol={currencySymbol} />
                 </div>
 
