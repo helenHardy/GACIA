@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus, Minus, Trash2, Package, ShoppingCart, Box } from 'lucide-react'
 
-export default function Cart({ items, onRemove, onUpdateQuantity, currencySymbol = 'Bs.' }) {
+export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity, currencySymbol = 'Bs.' }) {
     if (items.length === 0) {
         return (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--secondary-foreground))', padding: '2rem', opacity: 0.3 }}>
@@ -87,19 +87,41 @@ export default function Cart({ items, onRemove, onUpdateQuantity, currencySymbol
                         >
                             <Minus size={14} />
                         </button>
-                        <span style={{ fontSize: '0.9rem', fontWeight: '900', minWidth: '28px', textAlign: 'center' }}>{item.quantity}</span>
+                        <input
+                            type="number"
+                            style={{
+                                width: '45px',
+                                fontSize: '0.9rem',
+                                fontWeight: '900',
+                                textAlign: 'center',
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                outline: 'none',
+                                padding: 0,
+                                MozAppearance: 'textfield'
+                            }}
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onChange={(e) => onSetQuantity(item.id, parseInt(e.target.value) || 0)}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={() => { if (item.quantity === 0) onSetQuantity(item.id, 1) }}
+                            min="0"
+                        />
                         <button
                             className="btn"
+                            disabled={item.quantity >= (item.stock || 0)}
                             style={{
                                 width: '28px',
                                 height: '28px',
                                 padding: 0,
                                 borderRadius: '8px',
-                                backgroundColor: 'white',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                border: 'none'
+                                backgroundColor: item.quantity >= (item.stock || 0) ? 'hsl(var(--secondary) / 0.5)' : 'white',
+                                boxShadow: item.quantity >= (item.stock || 0) ? 'none' : '0 2px 4px rgba(0,0,0,0.05)',
+                                border: 'none',
+                                cursor: item.quantity >= (item.stock || 0) ? 'not-allowed' : 'pointer',
+                                opacity: item.quantity >= (item.stock || 0) ? 0.5 : 1
                             }}
                             onClick={() => onUpdateQuantity(item.id, 1)}
+                            title={item.quantity >= (item.stock || 0) ? 'Stock máximo alcanzado' : 'Aumentar cantidad'}
                         >
                             <Plus size={14} />
                         </button>
@@ -126,6 +148,11 @@ export default function Cart({ items, onRemove, onUpdateQuantity, currencySymbol
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateX(10px); }
                     to { opacity: 1; transform: translateX(0); }
+                }
+                input::-webkit-outer-spin-button,
+                input::-webkit-inner-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
                 }
             `}</style>
         </div>

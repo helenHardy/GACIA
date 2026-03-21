@@ -118,6 +118,23 @@ export default function POS() {
         }))
     }
 
+    const setQuantity = (productId, newQuantity) => {
+        setCart(prev => prev.map(item => {
+            if (item.id === productId) {
+                const availableStock = item.stock || 0
+                // Permitimos 0 temporalmente para que el usuario pueda borrar y escribir
+                const qty = Math.max(0, newQuantity)
+
+                if (qty > availableStock) {
+                    alert(`Solo hay ${availableStock} unidades disponibles de ${item.name}.`)
+                    return { ...item, quantity: availableStock }
+                }
+                return { ...item, quantity: qty }
+            }
+            return item
+        }))
+    }
+
     const handleCheckout = async (checkoutData) => {
         try {
             if (!selectedBranchId) return alert('Seleccione una sucursal')
@@ -354,7 +371,13 @@ export default function POS() {
                 </div>
 
                 <div className="no-scrollbar" style={{ flex: 1, overflowY: 'scroll', paddingRight: '0.25rem' }}>
-                    <Cart items={cart} onRemove={removeFromCart} onUpdateQuantity={updateQuantity} currencySymbol={currencySymbol} />
+                    <Cart
+                        items={cart}
+                        onRemove={removeFromCart}
+                        onUpdateQuantity={updateQuantity}
+                        onSetQuantity={setQuantity}
+                        currencySymbol={currencySymbol}
+                    />
                 </div>
 
                 <div style={{ padding: '1.75rem', backgroundColor: 'hsl(var(--secondary) / 0.15)', borderTop: '1px solid hsl(var(--border) / 0.4)' }}>

@@ -37,7 +37,7 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                         brand:brands(name),
                         model:models(name),
                         product_branch_settings(stock, branch_id)
-                    `).order('name')
+                    `).eq('active', true).order('name')
                 ])
 
                 setSuppliers(suppliersRes.data || [])
@@ -457,8 +457,10 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                     <td style={{ padding: '1rem' }}>
                                                         <input
                                                             type="number"
-                                                            value={item.quantity}
+                                                            value={item.quantity === 0 ? '' : item.quantity}
                                                             onChange={(e) => updateItem(item.product_id, 'quantity', e.target.value)}
+                                                            onFocus={(e) => !readOnly && e.target.select()}
+                                                            onBlur={() => { if (!readOnly && item.quantity === 0) updateItem(item.product_id, 'quantity', 1) }}
                                                             disabled={readOnly}
                                                             className="form-input"
                                                             style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
@@ -468,8 +470,10 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                         {item.is_pack ? (
                                                             <input
                                                                 type="number"
-                                                                value={item.units_per_pack}
+                                                                value={item.units_per_pack === 0 ? '' : item.units_per_pack}
                                                                 onChange={(e) => updateItem(item.product_id, 'units_per_pack', e.target.value)}
+                                                                onFocus={(e) => !readOnly && e.target.select()}
+                                                                onBlur={() => { if (!readOnly && item.units_per_pack === 0) updateItem(item.product_id, 'units_per_pack', 1) }}
                                                                 disabled={readOnly}
                                                                 className="form-input"
                                                                 style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
@@ -484,8 +488,10 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                                                             <input
                                                                 type="number"
                                                                 step="0.01"
-                                                                value={item.unit_cost}
+                                                                value={item.unit_cost === 0 ? '' : item.unit_cost}
                                                                 onChange={(e) => updateItem(item.product_id, 'unit_cost', e.target.value)}
+                                                                onFocus={(e) => !readOnly && e.target.select()}
+                                                                onBlur={() => { if (!readOnly && item.unit_cost === 0) updateItem(item.product_id, 'unit_cost', 0) }}
                                                                 disabled={readOnly}
                                                                 className="form-input"
                                                                 style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white', paddingLeft: '1.4rem' }}

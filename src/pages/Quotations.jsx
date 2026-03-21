@@ -187,14 +187,32 @@ export default function Quotations() {
             setIsSaving(true)
             const quotation = convertingQuotation
 
-            // 1. Fetch items
+            // 1. Fetch items and current stock
             const { data: qItems, error: itemsFetchErr } = await supabase
                 .from('quotation_items')
-                .select('*')
+                .select('*, products(name)')
                 .eq('quotation_id', quotation.id)
 
             if (itemsFetchErr) throw itemsFetchErr
             if (!qItems || qItems.length === 0) throw new Error('La cotización no tiene productos.')
+
+            // Validate stock before proceeding
+            const productIds = qItems.map(i => i.product_id)
+            const { data: stockData } = await supabase
+                .from('product_branch_settings')
+                .select('product_id, stock')
+                .in('product_id', productIds)
+                .eq('branch_id', quotation.branch_id)
+
+            const stockMap = {}
+            stockData?.forEach(s => stockMap[s.product_id] = s.stock)
+
+            for (const item of qItems) {
+                const available = stockMap[item.product_id] || 0
+                if (item.quantity > available) {
+                    throw new Error(`Stock insuficiente para "${item.products.name}". Disponible: ${available}, Requerido: ${item.quantity}`)
+                }
+            }
 
             // 2. Get current user
             const { data: { user } } = await supabase.auth.getUser()

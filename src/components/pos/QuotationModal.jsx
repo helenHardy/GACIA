@@ -85,34 +85,56 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
         })
         setSelectedCustomer(quotation.customers)
 
-        // Fetch items
+        // Fetch items and their current stock
         const { data: itemsData } = await supabase
             .from('quotation_items')
             .select('*, products(name, sku)')
             .eq('quotation_id', quotation.id)
 
-        if (itemsData) {
+        if (itemsData && itemsData.length > 0) {
+            const productIds = itemsData.map(i => i.product_id)
+            const { data: stockData } = await supabase
+                .from('product_branch_settings')
+                .select('product_id, stock')
+                .in('product_id', productIds)
+                .eq('branch_id', quotation.branch_id)
+
+            const stockMap = {}
+            stockData?.forEach(s => stockMap[s.product_id] = s.stock)
+
             setItems(itemsData.map(item => ({
                 product_id: item.product_id,
                 name: item.products.name,
                 sku: item.products.sku,
                 quantity: item.quantity,
-                price: item.price
+                price: item.price,
+                stock: stockMap[item.product_id] || 0
             })))
         }
     }
 
     const searchProducts = async (term) => {
-        if (!term) {
+        if (!term || !formData.branch_id) {
             setProducts([])
             return
         }
         const { data } = await supabase
             .from('products')
-            .select('*')
+            .select(`
+                *,
+                settings:product_branch_settings!inner(stock)
+            `)
+            .eq('active', true)
+            .eq('settings.branch_id', formData.branch_id)
             .or(`name.ilike.%${term}%,sku.ilike.%${term}%`)
             .limit(10)
-        setProducts(data || [])
+
+        const mapped = data?.map(p => ({
+            ...p,
+            stock: p.settings[0]?.stock || 0
+        }))
+
+        setProducts(mapped || [])
         setShowProductList(true)
     }
 
@@ -126,7 +148,8 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                 name: product.name,
                 sku: product.sku,
                 quantity: 1,
-                price: product.price
+                price: product.price,
+                stock: product.stock // Almacenar stock disponible
             }])
         }
         setSearchTerm('')
@@ -139,7 +162,21 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
 
     const updateItem = (index, field, value) => {
         const newItems = [...items]
-        newItems[index][field] = parseFloat(value) || 0
+        const newValue = parseFloat(value) || 0
+
+        if (field === 'quantity') {
+            const availableStock = newItems[index].stock || 0
+            if (newValue > availableStock) {
+                alert(`Solo hay ${availableStock} unidades disponibles de este producto.`)
+                newItems[index][field] = availableStock
+            } else {
+                // Permitimos 0 temporalmente para borrar/escribir
+                newItems[index][field] = Math.max(0, newValue)
+            }
+        } else {
+            newItems[index][field] = Math.max(0, newValue)
+        }
+
         setItems(newItems)
     }
 
@@ -197,13 +234,38 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                                     {products.map(p => (
                                         <div
                                             key={p.id}
-                                            onClick={() => addItem(p)}
-                                            style={{ padding: '0.85rem 1rem', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'background 0.2s' }}
-                                            className="hover:bg-secondary/50"
+                                            onClick={() => {
+                                                if (p.stock <= 0) {
+                                                    alert(`El producto ${p.name} está agotado.`)
+                                                    return
+                                                }
+                                                addItem(p)
+                                            }}
+                                            style={{
+                                                padding: '0.85rem 1rem',
+                                                borderRadius: '10px',
+                                                cursor: p.stock > 0 ? 'pointer' : 'not-allowed',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                transition: 'background 0.2s',
+                                                opacity: p.stock > 0 ? 1 : 0.6,
+                                                backgroundColor: p.stock <= 0 ? 'hsl(var(--secondary) / 0.1)' : 'transparent'
+                                            }}
+                                            className={p.stock > 0 ? "hover:bg-secondary/50" : ""}
                                         >
                                             <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                 <span style={{ fontWeight: '700', fontSize: '0.9rem' }}>{p.name}</span>
-                                                <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>SKU: {p.sku}</span>
+                                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                    <span style={{ fontSize: '0.75rem', opacity: 0.5 }}>SKU: {p.sku}</span>
+                                                    <span style={{
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: '800',
+                                                        color: p.stock > 0 ? 'hsl(142 76% 36%)' : 'hsl(var(--destructive))'
+                                                    }}>
+                                                        Stock: {p.stock}
+                                                    </span>
+                                                </div>
                                             </div>
                                             <span style={{ fontWeight: '800', color: 'hsl(var(--primary))' }}>{currencySymbol} {p.price}</span>
                                         </div>
@@ -240,25 +302,52 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                                                     <td style={{ padding: '1rem' }}>
                                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                             <span style={{ fontWeight: '700', fontSize: '0.85rem' }}>{item.name}</span>
-                                                            <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{item.sku}</span>
+                                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>{item.sku}</span>
+                                                                <span style={{
+                                                                    fontSize: '0.7rem',
+                                                                    fontWeight: '800',
+                                                                    color: (item.stock || 0) > 0 ? 'hsl(142 76% 36%)' : 'hsl(var(--destructive))'
+                                                                }}>
+                                                                    Stock: {item.stock || 0}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1rem' }}>
                                                         <input
                                                             type="number"
                                                             className="btn"
-                                                            style={{ width: '60px', padding: '0.4rem', textAlign: 'center', backgroundColor: 'white', borderRadius: '8px', fontWeight: '800' }}
-                                                            value={item.quantity}
+                                                            style={{
+                                                                width: '60px',
+                                                                padding: '0.4rem',
+                                                                textAlign: 'center',
+                                                                backgroundColor: 'white',
+                                                                borderRadius: '8px',
+                                                                fontWeight: '800'
+                                                            }}
+                                                            value={item.quantity === 0 ? '' : item.quantity}
                                                             onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                                                            onFocus={(e) => e.target.select()}
+                                                            onBlur={() => { if (item.quantity === 0) updateItem(index, 'quantity', 1) }}
                                                         />
                                                     </td>
                                                     <td style={{ padding: '1rem', textAlign: 'right' }}>
                                                         <input
                                                             type="number"
                                                             className="btn"
-                                                            style={{ width: '80px', padding: '0.4rem', textAlign: 'right', backgroundColor: 'white', borderRadius: '8px', fontWeight: '800' }}
-                                                            value={item.price}
+                                                            style={{
+                                                                width: '80px',
+                                                                padding: '0.4rem',
+                                                                textAlign: 'right',
+                                                                backgroundColor: 'white',
+                                                                borderRadius: '8px',
+                                                                fontWeight: '800'
+                                                            }}
+                                                            value={item.price === 0 ? '' : item.price}
                                                             onChange={(e) => updateItem(index, 'price', e.target.value)}
+                                                            onFocus={(e) => e.target.select()}
+                                                            onBlur={() => { if (item.price === 0) updateItem(index, 'price', 0) }}
                                                         />
                                                     </td>
                                                     <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '800', fontSize: '0.9rem' }}>

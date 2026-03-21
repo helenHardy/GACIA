@@ -122,13 +122,14 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
             if (item.product_id !== productId) return item
             const updates = { ...item }
             if (field === 'display_quantity') {
-                updates.display_quantity = Math.max(1, parseInt(value) || 0)
+                // Permitimos 0 temporalmente para borrar/escribir
+                updates.display_quantity = Math.max(0, parseInt(value) || 0)
             } else if (field === 'unit_type') {
                 updates.unit_type = value
                 if (value === 'UNIDAD') updates.units_per_box = 1
                 else if (value === 'CAJA' && updates.units_per_box === 1) updates.units_per_box = 12
             } else if (field === 'units_per_box') {
-                updates.units_per_box = Math.max(1, parseInt(value) || 1)
+                updates.units_per_box = Math.max(0, parseInt(value) || 0)
             }
             return updates
         }))
@@ -435,8 +436,10 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                                                     <td style={{ padding: '1rem' }}>
                                                         <input
                                                             type="number"
-                                                            value={item.display_quantity}
+                                                            value={item.display_quantity === 0 ? '' : item.display_quantity}
                                                             onChange={(e) => updateItem(item.product_id, 'display_quantity', e.target.value)}
+                                                            onFocus={(e) => !readOnly && e.target.select()}
+                                                            onBlur={() => { if (!readOnly && item.display_quantity === 0) updateItem(item.product_id, 'display_quantity', 1) }}
                                                             disabled={readOnly}
                                                             className="form-input"
                                                             style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}
@@ -446,8 +449,10 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                                                         {item.unit_type === 'CAJA' ? (
                                                             <input
                                                                 type="number"
-                                                                value={item.units_per_box}
+                                                                value={item.units_per_box === 0 ? '' : item.units_per_box}
                                                                 onChange={(e) => updateItem(item.product_id, 'units_per_box', e.target.value)}
+                                                                onFocus={(e) => !readOnly && e.target.select()}
+                                                                onBlur={() => { if (!readOnly && item.units_per_box === 0) updateItem(item.product_id, 'units_per_box', 1) }}
                                                                 disabled={readOnly}
                                                                 className="form-input"
                                                                 style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'transparent' : 'white' }}

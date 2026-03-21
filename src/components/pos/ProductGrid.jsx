@@ -30,6 +30,7 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
                     settings:product_branch_settings!inner(*)
                 `)
                 .eq('settings.branch_id', branchId)
+                .eq('active', true)
                 .order('name')
 
             if (error) throw error

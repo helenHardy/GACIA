@@ -12,7 +12,8 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         model_id: '',
         description: '',
         price: 0,
-        image_url: ''
+        image_url: '',
+        active: true
     })
     const [categories, setCategories] = useState([])
     const [brands, setBrands] = useState([])
@@ -75,7 +76,8 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                 model_id: product.model_id || '',
                 description: product.description || '',
                 price: product.price || 0,
-                image_url: product.image_url || ''
+                image_url: product.image_url || '',
+                active: product.active ?? true
             })
             fetchProductBranchSettings()
             if (product.brand_id) {
@@ -432,8 +434,9 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                     type="number"
                                                     step="0.01"
                                                     name="price"
-                                                    value={formData.price}
+                                                    value={formData.price === 0 ? '' : formData.price}
                                                     onChange={handleChange}
+                                                    onFocus={(e) => !readOnly && e.target.select()}
                                                     placeholder="0.00"
                                                     style={{ ...inputStyle, paddingLeft: currencySymbol.length > 2 ? '3.2rem' : '1.8rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
                                                     readOnly={readOnly}
@@ -453,6 +456,23 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             readOnly={readOnly}
                                         />
                                     </div>
+
+                                    {product && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                id="product_active"
+                                                name="active"
+                                                checked={formData.active}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
+                                                disabled={readOnly}
+                                                style={{ width: '18px', height: '18px', cursor: readOnly ? 'default' : 'pointer' }}
+                                            />
+                                            <label htmlFor="product_active" style={{ fontSize: '0.9rem', fontWeight: '600', cursor: readOnly ? 'default' : 'pointer' }}>
+                                                Producto Activo (Visible en Inventario y POS)
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -561,7 +581,16 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                     </div>
                                                     <div style={inputWrapperStyle}>
                                                         <label style={labelStyle}>Precio ({currencySymbol})</label>
-                                                        <input type="number" step="0.01" placeholder="Base" value={s.price || ''} onChange={(e) => handleBranchSettingChange(s.branch_id, 'price', e.target.value)} readOnly={readOnly} style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }} />
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            placeholder="Base"
+                                                            value={s.price === 0 ? '' : (s.price || '')}
+                                                            onChange={(e) => handleBranchSettingChange(s.branch_id, 'price', e.target.value)}
+                                                            onFocus={(e) => !readOnly && e.target.select()}
+                                                            readOnly={readOnly}
+                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }}
+                                                        />
                                                     </div>
                                                 </div>
                                             </div>

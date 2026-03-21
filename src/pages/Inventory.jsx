@@ -22,10 +22,12 @@ export default function Inventory() {
     const [selectedBrandId, setSelectedBrandId] = useState('')
     const [selectedModelId, setSelectedModelId] = useState('')
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
+    const [showInactive, setShowInactive] = useState(false)
 
     // UI state
     const [toast, setToast] = useState(null)
     const [deleteId, setDeleteId] = useState(null)
+    const [isForceDelete, setIsForceDelete] = useState(false)
 
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false)
@@ -87,7 +89,7 @@ export default function Inventory() {
 
     useEffect(() => {
         fetchProducts()
-    }, [selectedBranchId])
+    }, [selectedBranchId, showInactive])
 
     async function fetchBranches() {
         try {
@@ -181,6 +183,10 @@ export default function Inventory() {
                         settings:product_branch_settings!inner(*)
                     `)
                     .eq('settings.branch_id', selectedBranchId)
+            }
+
+            if (!showInactive) {
+                query = query.eq('active', true)
             }
 
             const { data, error } = await query.order('name')
@@ -284,18 +290,49 @@ export default function Inventory() {
     const confirmDelete = async () => {
         if (!deleteId) return
         try {
-            const { error } = await supabase
-                .from('products')
-                .delete()
-                .eq('id', deleteId)
-            if (error) throw error
-            showToast('Producto eliminado correctamente')
+            if (isForceDelete) {
+                // Total Delete (Hard delete)
+                const { error } = await supabase
+                    .from('products')
+                    .delete()
+                    .eq('id', deleteId)
+                if (error) throw error
+                showToast('Producto eliminado permanentemente')
+            } else {
+                // Deactivate (Soft delete)
+                const { error } = await supabase
+                    .from('products')
+                    .update({ active: false })
+                    .eq('id', deleteId)
+                if (error) throw error
+                showToast('Producto desactivado correctamente')
+            }
             fetchProducts()
         } catch (err) {
-            console.error('Error deleting product:', err)
-            showToast('Error al eliminar. Verifique dependencias', 'error')
+            console.error('Error in product action:', err)
+            if (isForceDelete) {
+                showToast('No se puede eliminar: tiene historial o dependencias.', 'error')
+            } else {
+                showToast('Error al desactivar el producto.', 'error')
+            }
         } finally {
             setDeleteId(null)
+            setIsForceDelete(false)
+        }
+    }
+
+    async function reactivateProduct(productId) {
+        try {
+            const { error } = await supabase
+                .from('products')
+                .update({ active: true })
+                .eq('id', productId)
+            if (error) throw error
+            showToast('Producto reactivado')
+            fetchProducts()
+        } catch (err) {
+            console.error('Error reactivating:', err)
+            showToast('Error al reactivar', 'error')
         }
     }
 
@@ -346,13 +383,19 @@ export default function Inventory() {
                         <div style={{ width: '64px', height: '64px', backgroundColor: 'hsl(var(--destructive) / 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
                             <Trash2 size={32} color="hsl(var(--destructive))" />
                         </div>
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>¿Eliminar producto?</h3>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>
+                            {isForceDelete ? '¿Eliminar permanentemente?' : '¿Desactivar producto?'}
+                        </h3>
                         <p style={{ color: 'hsl(var(--secondary-foreground))', marginBottom: '2rem' }}>
-                            Esta acción no se puede deshacer. Se eliminará el producto y su configuración de sucursales.
+                            {isForceDelete
+                                ? 'Esta acción borrará el producto y podría fallar si tiene historial de ventas o compras. No se puede deshacer.'
+                                : 'El producto dejará de estar visible en el inventario activo y POS, pero conservará su historial.'}
                         </p>
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button className="btn" style={{ flex: 1, backgroundColor: 'hsl(var(--secondary))' }} onClick={() => setDeleteId(null)}>Cancelar</button>
-                            <button className="btn" style={{ flex: 1, backgroundColor: 'hsl(var(--destructive))', color: 'white' }} onClick={confirmDelete}>Eliminar</button>
+                            <button className="btn" style={{ flex: 1, backgroundColor: 'hsl(var(--secondary))' }} onClick={() => { setDeleteId(null); setIsForceDelete(false); }}>Cancelar</button>
+                            <button className="btn" style={{ flex: 1, backgroundColor: isForceDelete ? 'hsl(var(--destructive))' : 'hsl(var(--primary))', color: 'white' }} onClick={confirmDelete}>
+                                {isForceDelete ? 'Eliminar Todo' : 'Desactivar'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -492,12 +535,22 @@ export default function Inventory() {
 
                 <button
                     className="btn"
+                    style={{ backgroundColor: showInactive ? 'hsl(var(--primary) / 0.1)' : 'hsl(var(--secondary))', padding: '0.4rem 0.8rem', borderRadius: '10px', color: showInactive ? 'hsl(var(--primary))' : 'inherit' }}
+                    onClick={() => setShowInactive(!showInactive)}
+                    title={showInactive ? "Ocultar Inactivos" : "Mostrar Inactivos"}
+                >
+                    <Eye size={16} />
+                </button>
+
+                <button
+                    className="btn"
                     style={{ backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.8rem', borderRadius: '10px' }}
                     onClick={() => {
                         setSelectedCategoryId('')
                         setSelectedBrandId('')
                         setSelectedModelId('')
                         setSearchTerm('')
+                        setShowInactive(false)
                         if (isAdmin) setSelectedBranchId('all')
                     }}
                     title="Limpiar Filtros"
@@ -554,9 +607,14 @@ export default function Inventory() {
                             filteredProducts.map(product => (
                                 <tr
                                     key={product.id}
-                                    style={{ borderBottom: '1px solid hsl(var(--border) / 0.5)', transition: 'background-color 0.2s' }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.2)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    style={{
+                                        borderBottom: '1px solid hsl(var(--border) / 0.5)',
+                                        transition: 'background-color 0.2s',
+                                        opacity: product.active === false ? 0.6 : 1,
+                                        backgroundColor: product.active === false ? 'hsl(var(--secondary) / 0.1)' : 'transparent'
+                                    }}
+                                    onMouseEnter={(e) => { if (product.active !== false) e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.2)' }}
+                                    onMouseLeave={(e) => { if (product.active !== false) e.currentTarget.style.backgroundColor = 'transparent' }}
                                 >
                                     <td style={{ padding: '1rem' }}>
                                         <div style={{
@@ -615,10 +673,10 @@ export default function Inventory() {
                                             padding: '0.25rem 0.5rem',
                                             borderRadius: '999px',
                                             fontSize: '0.75rem',
-                                            backgroundColor: (product.current_stock ?? 0) > (product.current_min_stock ?? 0) ? 'hsl(142 76% 36% / 0.1)' : 'hsl(0 84% 60% / 0.1)',
-                                            color: (product.current_stock ?? 0) > (product.current_min_stock ?? 0) ? 'hsl(142 76% 36%)' : 'hsl(0 84% 60%)'
+                                            backgroundColor: product.active === false ? 'hsl(var(--secondary))' : ((product.current_stock ?? 0) > (product.current_min_stock ?? 0) ? 'hsl(142 76% 36% / 0.1)' : 'hsl(0 84% 60% / 0.1)'),
+                                            color: product.active === false ? 'hsl(var(--secondary-foreground))' : ((product.current_stock ?? 0) > (product.current_min_stock ?? 0) ? 'hsl(142 76% 36%)' : 'hsl(0 84% 60%)')
                                         }}>
-                                            {(product.current_stock ?? 0) > (product.current_min_stock ?? 0) ? 'En Stock' : 'Bajo Stock'}
+                                            {product.active === false ? 'Inactivo' : ((product.current_stock ?? 0) > (product.current_min_stock ?? 0) ? 'En Stock' : 'Bajo Stock')}
                                         </span>
                                     </td>
                                     <td style={{ padding: '1rem', textAlign: 'right' }}>
@@ -704,14 +762,42 @@ export default function Inventory() {
                                                 </button>
                                             )}
 
-                                            {(isAdmin || product.can_delete) && (
+                                            {product.active === false ? (
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '0.5rem', color: 'hsl(var(--primary))' }}
+                                                    onClick={() => reactivateProduct(product.id)}
+                                                    title="Reactivar Producto"
+                                                >
+                                                    <CheckCircle size={16} />
+                                                </button>
+                                            ) : (
+                                                isAdmin || product.can_delete ? (
+                                                    <button
+                                                        className="btn"
+                                                        style={{ padding: '0.5rem', color: 'hsl(var(--primary) / 0.7)' }}
+                                                        onClick={() => {
+                                                            setDeleteId(product.id)
+                                                            setIsForceDelete(false)
+                                                        }}
+                                                        title="Desactivar"
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                ) : null
+                                            )}
+
+                                            {isAdmin && (
                                                 <button
                                                     className="btn"
                                                     style={{ padding: '0.5rem', color: 'hsl(var(--destructive))' }}
-                                                    onClick={() => setDeleteId(product.id)}
-                                                    title="Eliminar"
+                                                    onClick={() => {
+                                                        setDeleteId(product.id)
+                                                        setIsForceDelete(true)
+                                                    }}
+                                                    title="Eliminar Permanente"
                                                 >
-                                                    <Trash2 size={16} />
+                                                    <X size={16} />
                                                 </button>
                                             )}
                                         </div>

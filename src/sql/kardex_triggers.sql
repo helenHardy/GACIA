@@ -107,6 +107,17 @@ begin
     if (TG_OP = 'INSERT') then
         select branch_id into v_branch_id from public.sales where id = new.sale_id;
         
+        -- Validar stock antes de descontar
+        select stock into v_diff from public.product_branch_settings 
+        where product_id = new.product_id and branch_id = v_branch_id;
+
+        if coalesce(v_diff, 0) < new.quantity then
+            raise exception 'Stock insuficiente para el producto %. Disponible: %, Solicitado: %', 
+                (select name from public.products where id = new.product_id),
+                coalesce(v_diff, 0),
+                new.quantity;
+        end if;
+
         v_new_stock := public.update_branch_stock(new.product_id, v_branch_id, -new.quantity);
 
         insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)
@@ -116,10 +127,21 @@ begin
         
     elsif (TG_OP = 'UPDATE') then
         v_diff := new.quantity - old.quantity;
-        if v_diff = 0 then return new; end if;
+        if v_diff <= 0 then return new; end if; -- Si bajamos o es igual, no validamos stock (liberamos stock)
 
         select branch_id into v_branch_id from public.sales where id = new.sale_id;
         
+        -- Validar stock adicional antes de descontar
+        select stock into v_new_stock from public.product_branch_settings 
+        where product_id = new.product_id and branch_id = v_branch_id;
+
+        if coalesce(v_new_stock, 0) < v_diff then
+            raise exception 'Stock insuficiente para aumentar la cantidad del producto %. Disponible adicional: %, Solicitado adicional: %', 
+                (select name from public.products where id = new.product_id),
+                coalesce(v_new_stock, 0),
+                v_diff;
+        end if;
+
         v_new_stock := public.update_branch_stock(new.product_id, v_branch_id, -v_diff);
 
         insert into public.kardex (branch_id, product_id, type, quantity, balance_after, reference_id, notes)

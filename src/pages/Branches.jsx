@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Plus, MapPin, Phone, Edit2, Trash2, Building2, RefreshCw, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import BranchModal from '../components/inventory/BranchModal'
-
+//jhjhjh
 export default function Branches() {
     const [branches, setBranches] = useState([])
     const [loading, setLoading] = useState(true)

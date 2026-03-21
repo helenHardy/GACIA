@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Building, Bell, Shield, Palette, Save, CheckCircle, Loader2, Moon, Sun, Lock, Key, Receipt, Trash2 } from 'lucide-react'
+import { Settings as SettingsIcon, Building, Bell, Shield, Palette, Save, CheckCircle, Loader2, Moon, Sun, Lock, Key, Receipt, Trash2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Settings() {
@@ -28,10 +28,34 @@ export default function Settings() {
     const [newRole, setNewRole] = useState({ name: '', description: '' })
     const [isSavingPermissions, setIsSavingPermissions] = useState(false)
 
-    // Password State
     const [passwordData, setPasswordData] = useState({ newPassword: '', confirmPassword: '' })
     const [passwordError, setPasswordError] = useState(null)
     const [passwordSuccess, setPasswordSuccess] = useState(null)
+
+    // Database Cleanup State
+    const [showCleanupConfirm, setShowCleanupConfirm] = useState(false)
+    const [cleanupConfirmInput, setCleanupConfirmInput] = useState('')
+    const [isCleaning, setIsCleaning] = useState(false)
+
+    const handleCleanDatabase = async () => {
+        if (cleanupConfirmInput !== 'BORRAR TODO') return
+
+        try {
+            setIsCleaning(true)
+            const { error } = await supabase.rpc('clean_database')
+            if (error) throw error
+
+            alert('Base de datos limpiada correctamente. Solo el perfil admin@gmail.com ha sido conservado.')
+            setShowCleanupConfirm(false)
+            setCleanupConfirmInput('')
+            window.location.reload() // Reload to refresh all application state
+        } catch (err) {
+            console.error('Error cleaning database:', err)
+            alert('Error al limpiar la base de datos: ' + err.message)
+        } finally {
+            setIsCleaning(false)
+        }
+    }
 
     useEffect(() => {
         fetchSettings()
@@ -238,6 +262,7 @@ export default function Settings() {
         { id: 'notifications', label: 'Notificaciones', icon: <Bell size={20} /> },
         { id: 'security', label: 'Seguridad', icon: <Shield size={20} /> },
         { id: 'appearance', label: 'Apariencia', icon: <Palette size={20} /> },
+        { id: 'danger', label: 'Zona de Peligro', icon: <AlertTriangle size={20} /> },
     ]
 
     const menuKeys = [
@@ -623,39 +648,103 @@ export default function Settings() {
                     )}
 
                     {activeTab === 'notifications' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            <h3 style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '0.5rem' }}>Preferencias de Notificaciones</h3>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', borderRadius: 'var(--radius)' }}>
-                                    <div>
-                                        <h4 style={{ fontWeight: '500' }}>Notificaciones por Correo</h4>
-                                        <p style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground))' }}>Recibir resúmenes de ventas y alertas de stock.</p>
-                                    </div>
-                                    <div className="toggle">
-                                        <input
-                                            type="checkbox"
-                                            checked={settings.notifications_email}
-                                            onChange={(e) => setSettings({ ...settings, notifications_email: e.target.checked })}
-                                            style={{ width: '1.5rem', height: '1.5rem' }}
-                                        />
-                                    </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', borderRadius: 'var(--radius)' }}>
+                                <div>
+                                    <h4 style={{ fontWeight: '500' }}>Notificaciones por Correo</h4>
+                                    <p style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground))' }}>Recibir resúmenes de ventas y alertas de stock.</p>
                                 </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', borderRadius: 'var(--radius)' }}>
-                                    <div>
-                                        <h4 style={{ fontWeight: '500' }}>Notificaciones Push</h4>
-                                        <p style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground))' }}>Recibir alertas en tiempo real en el navegador.</p>
-                                    </div>
-                                    <div className="toggle">
-                                        <input
-                                            type="checkbox"
-                                            checked={settings.notifications_push}
-                                            onChange={(e) => setSettings({ ...settings, notifications_push: e.target.checked })}
-                                            style={{ width: '1.5rem', height: '1.5rem' }}
-                                        />
-                                    </div>
+                                <div className="toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.notifications_email}
+                                        onChange={(e) => setSettings({ ...settings, notifications_email: e.target.checked })}
+                                        style={{ width: '1.5rem', height: '1.5rem' }}
+                                    />
                                 </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', borderRadius: 'var(--radius)' }}>
+                                <div>
+                                    <h4 style={{ fontWeight: '500' }}>Notificaciones Push</h4>
+                                    <p style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground))' }}>Recibir alertas en tiempo real en el navegador.</p>
+                                </div>
+                                <div className="toggle">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.notifications_push}
+                                        onChange={(e) => setSettings({ ...settings, notifications_push: e.target.checked })}
+                                        style={{ width: '1.5rem', height: '1.5rem' }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'danger' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            <div style={{ padding: '1.5rem', border: '1px solid hsl(var(--destructive) / 0.3)', backgroundColor: 'hsl(var(--destructive) / 0.05)', borderRadius: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'hsl(var(--destructive))', marginBottom: '1rem' }}>
+                                    <AlertTriangle size={24} />
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Zona de Peligro: Limpieza de Base de Datos</h3>
+                                </div>
+                                <p style={{ color: 'hsl(var(--destructive))', fontWeight: '600', marginBottom: '1.5rem' }}>
+                                    ¡Atención! Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, productos, clientes, compras y perfiles de usuario (excepto admin@gmail.com).
+                                </p>
+
+                                {!showCleanupConfirm ? (
+                                    <button
+                                        className="btn"
+                                        onClick={() => setShowCleanupConfirm(true)}
+                                        style={{ backgroundColor: 'hsl(var(--destructive))', color: 'white', fontWeight: '700', padding: '0.75rem 1.5rem', borderRadius: '12px' }}
+                                    >
+                                        Limpiar Base de Datos Completamente
+                                    </button>
+                                ) : (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid hsl(var(--border))' }}>
+                                        <p style={{ fontSize: '0.875rem', fontWeight: '700', margin: 0 }}>
+                                            Para confirmar, escriba <span style={{ color: 'hsl(var(--destructive))', fontWeight: '900' }}>BORRAR TODO</span> a continuación:
+                                        </p>
+                                        <input
+                                            type="text"
+                                            className="btn"
+                                            style={{ width: '100%', justifyContent: 'flex-start', cursor: 'text', border: '1px solid hsl(var(--destructive) / 0.3)' }}
+                                            placeholder="Escriba aquí..."
+                                            value={cleanupConfirmInput}
+                                            onChange={(e) => setCleanupConfirmInput(e.target.value)}
+                                            autoFocus
+                                        />
+                                        <div style={{ display: 'flex', gap: '1rem' }}>
+                                            <button
+                                                className="btn"
+                                                onClick={() => { setShowCleanupConfirm(false); setCleanupConfirmInput(''); }}
+                                                style={{ flex: 1, backgroundColor: 'hsl(var(--secondary))' }}
+                                                disabled={isCleaning}
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                className="btn"
+                                                onClick={handleCleanDatabase}
+                                                style={{ flex: 1, backgroundColor: cleanupConfirmInput === 'BORRAR TODO' ? 'hsl(var(--destructive))' : 'hsl(var(--destructive) / 0.4)', color: 'white', fontWeight: '700' }}
+                                                disabled={isCleaning || cleanupConfirmInput !== 'BORRAR TODO'}
+                                            >
+                                                {isCleaning ? <Loader2 size={18} className="animate-spin" /> : 'CONFIRMAR ELIMINACIÓN'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="card" style={{ padding: '1.5rem' }}>
+                                <h4 style={{ fontWeight: '600', marginBottom: '0.5rem' }}>¿Qué se conserva?</h4>
+                                <ul style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground) / 0.8)', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                    <li>Perfil principal: admin@gmail.com</li>
+                                    <li>Configuración de la Empresa (Nombre, NIT, Dirección)</li>
+                                    <li>Estructura de Sucursales</li>
+                                    <li>Roles y Permisos del sistema</li>
+                                    <li>Configuraciones generales de facturación</li>
+                                </ul>
                             </div>
                         </div>
                     )}
