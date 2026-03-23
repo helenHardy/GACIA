@@ -46,10 +46,30 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
             setBranches(availableBranches)
             setProducts(productsRes.data || [])
 
+            // 4. Fetch and apply default branch setting
+            const { data: defaultSetting } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('key', 'default_purchase_branch')
+                .maybeSingle()
+
             if (!initialData && availableBranches.length > 0) {
-                setOriginBranch(availableBranches[0].id)
-                if (availableBranches.length > 1) {
-                    setDestBranch(availableBranches[1].id)
+                const defaultId = defaultSetting ? parseInt(defaultSetting.value) : null
+                const exists = availableBranches.find(b => b.id === defaultId)
+
+                if (exists) {
+                    setOriginBranch(defaultId)
+                    // If destination is same as default origin, pick different destination if possible
+                    if (availableBranches[0].id === defaultId && availableBranches.length > 1) {
+                        setDestBranch(availableBranches[1].id)
+                    } else {
+                        setDestBranch(availableBranches[0].id)
+                    }
+                } else {
+                    setOriginBranch(availableBranches[0].id)
+                    if (availableBranches.length > 1) {
+                        setDestBranch(availableBranches[1].id)
+                    }
                 }
             }
         } catch (err) {
@@ -434,9 +454,10 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                                                         </div>
                                                     </td>
                                                     <td style={{ padding: '1rem' }}>
-                                                        <input
-                                                            type="number"
-                                                            value={item.display_quantity === 0 ? '' : item.display_quantity}
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={item.display_quantity === 0 ? '' : item.display_quantity}
                                                             onChange={(e) => updateItem(item.product_id, 'display_quantity', e.target.value)}
                                                             onFocus={(e) => !readOnly && e.target.select()}
                                                             onBlur={() => { if (!readOnly && item.display_quantity === 0) updateItem(item.product_id, 'display_quantity', 1) }}
@@ -449,6 +470,7 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                                                         {item.unit_type === 'CAJA' ? (
                                                             <input
                                                                 type="number"
+                                                                min="1"
                                                                 value={item.units_per_box === 0 ? '' : item.units_per_box}
                                                                 onChange={(e) => updateItem(item.product_id, 'units_per_box', e.target.value)}
                                                                 onFocus={(e) => !readOnly && e.target.select()}

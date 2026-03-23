@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle, Eye, Tag, Layers } from 'lucide-react'
+import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { inventoryService } from '../services/inventoryService'
 import ProductModal from '../components/inventory/ProductModal'
@@ -130,30 +131,27 @@ export default function Inventory() {
     }
 
     const handleExport = () => {
-        const headers = ['SKU', 'Nombre', 'Categoría', 'Precio', 'Stock', 'Mínimo']
+        const headers = ['SKU', 'Nombre', 'Categoría', 'Marca', 'Modelo', 'Precio', 'Stock', 'Mínimo']
         const rows = filteredProducts.map(p => [
-            p.sku,
-            p.name,
-            p.category,
-            p.current_price,
-            p.current_stock,
-            p.current_min_stock
+            p.sku || '',
+            p.name || '',
+            p.category?.name || 'General',
+            p.brand?.name || '',
+            p.model?.name || '',
+            p.current_price || 0,
+            p.current_stock || 0,
+            p.current_min_stock || 0
         ])
 
-        const csvContent = [
-            headers.join(','),
-            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-        ].join('\n')
+        const worksheet = utils.aoa_to_sheet([headers, ...rows])
+        const workbook = utils.book_new()
+        utils.book_append_sheet(workbook, worksheet, 'Inventario')
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-        const link = document.createElement('a')
-        const url = URL.createObjectURL(blob)
-        link.setAttribute('href', url)
-        link.setAttribute('download', `inventario_${new Date().toLocaleDateString('sv-SE')}.csv`)
-        link.style.visibility = 'hidden'
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
+        // Auto-size columns (basic attempt)
+        const maxWidths = headers.map((h, i) => Math.max(h.length, ...rows.map(r => String(r[i]).length)))
+        worksheet['!cols'] = maxWidths.map(w => ({ wch: w + 2 }))
+
+        writeFile(workbook, `inventario_${new Date().toLocaleDateString('sv-SE')}.xlsx`)
     }
 
     async function fetchProducts() {

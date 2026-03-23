@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Building, Bell, Shield, Palette, Save, CheckCircle, Loader2, Moon, Sun, Lock, Key, Receipt, Trash2, AlertTriangle } from 'lucide-react'
+import { Settings as SettingsIcon, Building, Bell, Shield, Palette, Save, CheckCircle, Loader2, Moon, Sun, Lock, Key, Receipt, Trash2, AlertTriangle, Download, Database } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 export default function Settings() {
@@ -57,7 +57,27 @@ export default function Settings() {
         }
     }
 
+    const handleDownloadMigrationScript = async () => {
+        try {
+            const response = await fetch('/full_schema.sql');
+            if (!response.ok) throw new Error('No se pudo encontrar el archivo de esquema.');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'gacia_full_schema.sql';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (err) {
+            console.error('Error downloading script:', err);
+            alert('Error al descargar el script: ' + err.message);
+        }
+    };
+
     useEffect(() => {
+
         fetchSettings()
         fetchRolesAndPermissions()
     }, [])
@@ -262,6 +282,7 @@ export default function Settings() {
         { id: 'notifications', label: 'Notificaciones', icon: <Bell size={20} /> },
         { id: 'security', label: 'Seguridad', icon: <Shield size={20} /> },
         { id: 'appearance', label: 'Apariencia', icon: <Palette size={20} /> },
+        { id: 'backups', label: 'Respaldos y Migración', icon: <Database size={20} /> },
         { id: 'danger', label: 'Zona de Peligro', icon: <AlertTriangle size={20} /> },
     ]
 
@@ -677,6 +698,40 @@ export default function Settings() {
                                         style={{ width: '1.5rem', height: '1.5rem' }}
                                     />
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'backups' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                            <div style={{ padding: '1.5rem', border: '1px solid hsl(var(--primary) / 0.2)', backgroundColor: 'hsl(var(--primary) / 0.05)', borderRadius: '16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'hsl(var(--primary))', marginBottom: '1rem' }}>
+                                    <Database size={24} />
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Exportar Base de Datos</h3>
+                                </div>
+                                <p style={{ color: 'hsl(var(--secondary-foreground))', marginBottom: '1.5rem' }}>
+                                    Descarga un script SQL completo con la estructura de las tablas, políticas de seguridad y triggers.
+                                    Utiliza este archivo para migrar tu sistema a una nueva instancia de Supabase.
+                                </p>
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleDownloadMigrationScript}
+                                    style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700', gap: '0.5rem' }}
+                                >
+                                    <Download size={20} />
+                                    Descargar Script de Migración (.sql)
+                                </button>
+                            </div>
+
+                            <div className="card" style={{ padding: '1.5rem' }}>
+                                <h4 style={{ fontWeight: '600', marginBottom: '1rem' }}>¿Qué incluye este script?</h4>
+                                <ul style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground) / 0.8)', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                    <li><strong>Estructura de Tablas:</strong> Definición de todas las tablas del sistema (Productos, Ventas, Clientes, etc.).</li>
+                                    <li><strong>Políticas RLS:</strong> Reglas de seguridad para proteger los datos por rol de usuario.</li>
+                                    <li><strong>Triggers y Funciones:</strong> Lógica automática para el control de stock (Kardex) y cálculos.</li>
+                                    <li><strong>Configuración Base:</strong> Moneda, nombre del sistema e impuestos por defecto.</li>
+                                    <li><strong>Guía de Inicio:</strong> Comentarios dentro del archivo sobre cómo crear el usuario Administrador inicial.</li>
+                                </ul>
                             </div>
                         </div>
                     )}

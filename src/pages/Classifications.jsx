@@ -28,7 +28,7 @@ export default function Classifications() {
     const [brands, setBrands] = useState([])
 
     // Form data
-    const [formData, setFormData] = useState({ name: '', brand_id: '' })
+    const [formData, setFormData] = useState({ name: '', brand_id: '', logo_url: '' })
 
     useEffect(() => {
         fetchData()
@@ -74,7 +74,8 @@ export default function Classifications() {
         setEditingItem(item)
         setFormData({
             name: item?.name || '',
-            brand_id: item?.brand_id || (brands.length > 0 ? brands[0].id : '')
+            brand_id: item?.brand_id || (brands.length > 0 ? brands[0].id : ''),
+            logo_url: item?.logo_url || ''
         })
         setIsModalOpen(true)
     }
@@ -89,8 +90,8 @@ export default function Classifications() {
                 if (editingItem) await inventoryService.updateCategory(editingItem.id, formData.name)
                 else await inventoryService.createCategory(formData.name)
             } else if (activeTab === 'brands') {
-                if (editingItem) await inventoryService.updateBrand(editingItem.id, formData.name)
-                else await inventoryService.createBrand(formData.name)
+                if (editingItem) await inventoryService.updateBrand(editingItem.id, formData.name, formData.logo_url)
+                else await inventoryService.createBrand(formData.name, formData.logo_url)
             } else if (activeTab === 'models') {
                 if (editingItem) await inventoryService.updateModel(editingItem.id, formData.name, formData.brand_id)
                 else await inventoryService.createModel(formData.name, formData.brand_id)

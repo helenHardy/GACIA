@@ -200,56 +200,29 @@ export default function Purchases() {
             const { items, ...header } = purchaseData
             const { data: { user } } = await supabase.auth.getUser()
 
-            let targetPurchaseId = null
-
-            if (editingPurchase) {
-                targetPurchaseId = editingPurchase.id
-                // Delete old items
-                const { error: delError } = await supabase
-                    .from('purchase_items')
-                    .delete()
-                    .eq('purchase_id', targetPurchaseId)
-                if (delError) throw delError
-
-                // Update header
-                const { error: upError } = await supabase
-                    .from('purchases')
-                    .update({
-                        supplier_id: header.supplier_id,
-                        branch_id: header.branch_id,
-                        total: header.total,
-                        user_id: user?.id
-                    })
-                    .eq('id', targetPurchaseId)
-                if (upError) throw upError
-            } else {
-                const { data: purchase, error: pError } = await supabase
-                    .from('purchases')
-                    .insert([{ ...header, user_id: user?.id }])
-                    .select()
-                    .single()
-                if (pError) throw pError
-                targetPurchaseId = purchase.id
-            }
-
-            const itemsToSave = items.map(item => ({
-                purchase_id: targetPurchaseId,
+            // Prepare items for RPC
+            const itemsForRpc = items.map(item => ({
                 product_id: item.product_id,
                 quantity: item.quantity,
                 unit_cost: item.unit_cost,
                 total: item.total
             }))
 
-            const { error: itemsError } = await supabase
-                .from('purchase_items')
-                .insert(itemsToSave)
+            const { data: purchaseId, error: rpcError } = await supabase.rpc('register_purchase_v2', {
+                p_purchase_id: editingPurchase?.id || null,
+                p_supplier_id: header.supplier_id,
+                p_branch_id: header.branch_id,
+                p_total: header.total,
+                p_user_id: user?.id,
+                p_items: itemsForRpc
+            })
 
-            if (itemsError) throw itemsError
+            if (rpcError) throw rpcError
 
             setIsModalOpen(false)
             setEditingPurchase(null)
             fetchPurchases()
-            showToast(editingPurchase ? 'Compra actualizada correctamente.' : 'Compra registrada con éxito.')
+            showToast(editingPurchase ? 'Ingreso actualizado correctamente.' : 'Inventario cargado con éxito.')
         } catch (err) {
             console.error('Error saving purchase:', err)
             showToast('Error al procesar la compra: ' + err.message, 'error')
@@ -283,27 +256,21 @@ export default function Purchases() {
             {/* Header Section */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
                 <div>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '800', letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>Gestión de Compras</h1>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '800', letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>Historial de Compras</h1>
                     <p style={{ color: 'hsl(var(--secondary-foreground) / 0.6)', fontWeight: '500' }}>Abastecimiento de mercadería y control de costos</p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button
-                        className="btn shadow-sm"
-                        onClick={fetchPurchases}
-                        disabled={loading}
-                        style={{ backgroundColor: 'hsl(var(--secondary) / 0.5)', borderRadius: '12px', padding: '0.75rem' }}
-                    >
-                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                    <button
-                        className="btn btn-primary shadow-lg shadow-primary/20"
-                        onClick={() => { setEditingPurchase(null); setIsModalOpen(true); }}
-                        style={{ borderRadius: '12px', padding: '0.75rem 1.5rem', fontWeight: '700', gap: '0.5rem' }}
-                    >
-                        <Plus size={22} />
-                        Nueva Compra
-                    </button>
-                </div>
+                <button
+                    className="btn btn-primary shadow-lg shadow-primary/20"
+                    onClick={() => {
+                        setEditingPurchase(null)
+                        setIsReadOnly(false)
+                        setIsModalOpen(true)
+                    }}
+                    style={{ borderRadius: '12px', padding: '0.75rem 1.5rem', fontWeight: '700', gap: '0.5rem' }}
+                >
+                    <Plus size={22} />
+                    Nueva Compra
+                </button>
             </div>
 
             {/* Stats Overview */}
@@ -390,7 +357,7 @@ export default function Purchases() {
                                 <tr>
                                     <td colSpan="6" style={{ padding: '5rem', textAlign: 'center' }}>
                                         <ShoppingBag size={64} style={{ margin: '0 auto 1.5rem', opacity: 0.1 }} />
-                                        <p style={{ fontWeight: '600', fontSize: '1.1rem', opacity: 0.4 }}>No se encontraron compras registradas</p>
+                                        <p style={{ fontWeight: '600', fontSize: '1.1rem', opacity: 0.4 }}>No se encontraron ingresos de inventario</p>
                                     </td>
                                 </tr>
                             ) : (
@@ -447,25 +414,13 @@ export default function Purchases() {
                                         </td>
                                         <td style={{ padding: '1.25rem 1.5rem' }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>
-                                                {/* Admin: Permissions Control */}
                                                 {isAdmin && (
                                                     <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '4px', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.3)' }}>
                                                         <button
                                                             onClick={() => togglePermission(p.id, 'can_edit', p.can_edit)}
                                                             className="btn-icon"
                                                             title={p.can_edit ? "Bloquear Edición" : "Habilitar Edición"}
-                                                            style={{
-                                                                padding: '6px',
-                                                                borderRadius: '8px',
-                                                                border: 'none',
-                                                                backgroundColor: p.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent',
-                                                                color: p.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                transition: 'all 0.2s'
-                                                            }}
+                                                            style={{ padding: '6px', borderRadius: '8px', border: 'none', backgroundColor: p.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent', color: p.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
                                                         >
                                                             <Edit2 size={14} />
                                                         </button>
@@ -473,41 +428,48 @@ export default function Purchases() {
                                                             onClick={() => togglePermission(p.id, 'can_void', p.can_void)}
                                                             className="btn-icon"
                                                             title={p.can_void ? "Bloquear Anulación" : "Habilitar Anulación"}
-                                                            style={{
-                                                                padding: '6px',
-                                                                borderRadius: '8px',
-                                                                border: 'none',
-                                                                backgroundColor: p.can_void ? 'hsl(var(--destructive) / 0.15)' : 'transparent',
-                                                                color: p.can_void ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)',
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                transition: 'all 0.2s'
-                                                            }}
+                                                            style={{ padding: '6px', borderRadius: '8px', border: 'none', backgroundColor: p.can_void ? 'hsl(var(--destructive) / 0.15)' : 'transparent', color: p.can_void ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
                                                         >
                                                             <Trash2 size={14} />
                                                         </button>
                                                     </div>
                                                 )}
 
-                                                {(isAdmin || p.can_edit) ? (
+                                                <button
+                                                    onClick={() => handleEdit(p, true)}
+                                                    className="btn-icon"
+                                                    style={{
+                                                        padding: '0.6rem',
+                                                        borderRadius: '12px',
+                                                        backgroundColor: 'hsl(var(--secondary) / 0.5)',
+                                                        color: 'hsl(var(--foreground))',
+                                                        border: '1px solid hsl(var(--border) / 0.5)',
+                                                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                                                    }}
+                                                    title="Ver Detalles"
+                                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--secondary))'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--secondary) / 0.5)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                                                >
+                                                    <Eye size={18} />
+                                                </button>
+
+                                                {(isAdmin || p.can_edit) && (
                                                     <button
                                                         onClick={() => handleEdit(p, false)}
-                                                        className="btn"
-                                                        style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary))', color: 'hsl(var(--primary))' }}
+                                                        className="btn-icon"
+                                                        style={{
+                                                            padding: '0.6rem',
+                                                            borderRadius: '12px',
+                                                            backgroundColor: 'hsl(var(--primary) / 0.1)',
+                                                            color: 'hsl(var(--primary))',
+                                                            border: '1px solid hsl(var(--primary) / 0.2)',
+                                                            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+                                                        }}
                                                         title="Modificar"
+                                                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.15)'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                                                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.1)'; e.currentTarget.style.transform = 'translateY(0)' }}
                                                     >
                                                         <Edit2 size={18} />
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => handleEdit(p, true)}
-                                                        className="btn"
-                                                        style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.4)', color: 'hsl(var(--foreground) / 0.4)' }}
-                                                        title="Ver Detalles"
-                                                    >
-                                                        <Eye size={18} />
                                                     </button>
                                                 )}
 

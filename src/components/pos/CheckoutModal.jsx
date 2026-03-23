@@ -260,6 +260,12 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                         </div>
                                         <div style={{ flex: 1 }}>
                                             <p style={{ fontSize: '0.85rem', fontWeight: '700', margin: 0 }}>{selectedCustomer ? selectedCustomer.name : 'Cliente General (Contado)'}</p>
+                                            {selectedCustomer && (
+                                                <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: selectedCustomer.current_balance > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
+                                                    Saldo: {currencySymbol}{parseFloat(selectedCustomer.current_balance || 0).toFixed(2)} 
+                                                    {selectedCustomer.current_balance > 0 ? ' (Deuda)' : ' (Al día)'}
+                                                </p>
+                                            )}
                                         </div>
                                         <ChevronDown size={18} opacity={0.3} />
                                     </button>

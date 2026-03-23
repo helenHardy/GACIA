@@ -114,7 +114,7 @@ export default function Layout() {
         { to: '/inventory', icon: <Package size={20} />, label: 'Inventario', key: 'inventory' },
         { to: '/branches', icon: <Building2 size={20} />, label: 'Sucursales', key: 'branches' },
         { to: '/suppliers', icon: <Truck size={20} />, label: 'Proveedores', key: 'suppliers' },
-        { to: '/purchases', icon: <ClipboardList size={20} />, label: 'Compras', key: 'purchases' },
+        { to: '/purchases', icon: <ClipboardList size={20} />, label: 'Cargar Inventario', key: 'purchases' },
         { to: '/transfers', icon: <ArrowLeftRight size={20} />, label: 'Traspasos', key: 'transfers' },
         { to: '/reports', icon: <FileText size={20} />, label: 'Reportes', key: 'reports' },
         { to: '/customers', icon: <Contact size={20} />, label: 'Clientes', key: 'customers' },

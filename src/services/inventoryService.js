@@ -8,14 +8,14 @@ export const inventoryService = {
         return data
     },
 
-    async createBrand(name) {
-        const { data, error } = await supabase.from('brands').insert([{ name }]).select().single()
+    async createBrand(name, logoUrl = null) {
+        const { data, error } = await supabase.from('brands').insert([{ name, logo_url: logoUrl }]).select().single()
         if (error) throw error
         return data
     },
 
-    async updateBrand(id, name) {
-        const { data, error } = await supabase.from('brands').update({ name }).eq('id', id).select().single()
+    async updateBrand(id, name, logoUrl = null) {
+        const { data, error } = await supabase.from('brands').update({ name, logo_url: logoUrl }).eq('id', id).select().single()
         if (error) throw error
         return data
     },

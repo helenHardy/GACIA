@@ -142,29 +142,21 @@ export default function Quotations() {
                 status: editingQuotation ? editingQuotation.status : 'Pendiente'
             }
 
-            let quotationId = editingQuotation?.id
-
-            if (editingQuotation) {
-                const { error } = await supabase.from('quotations').update(quotationData).eq('id', editingQuotation.id)
-                if (error) throw error
-                // Delete old items and insert new ones
-                await supabase.from('quotation_items').delete().eq('quotation_id', editingQuotation.id)
-            } else {
-                const { data, error } = await supabase.from('quotations').insert([quotationData]).select().single()
-                if (error) throw error
-                quotationId = data.id
-            }
-
-            const { error: itemsError } = await supabase.from('quotation_items').insert(
-                items.map(item => ({
-                    quotation_id: quotationId,
-                    product_id: item.product_id,
-                    quantity: item.quantity,
-                    price: item.price,
-                    total: item.price * item.quantity
-                }))
-            )
-            if (itemsError) throw itemsError
+            const { data, error: rpcError } = await supabase.rpc('register_quotation_v2', {
+                p_quotation_id: editingQuotation?.id || null,
+                p_items: items.map(item => ({ product_id: item.product_id, quantity: item.quantity, price: item.price })),
+                p_customer_id: formData.customer_id ? parseInt(formData.customer_id) : null,
+                p_branch_id: formData.branch_id ? parseInt(formData.branch_id) : null,
+                p_user_id: user?.id,
+                p_subtotal: subtotal,
+                p_tax: tax || 0,
+                p_discount: discount || 0,
+                p_total: total,
+                p_valid_until: formData.valid_until || null,
+                p_notes: formData.notes || '',
+                p_status: editingQuotation ? editingQuotation.status : 'Pendiente'
+            })
+            if (rpcError) throw rpcError
 
             setIsModalOpen(false)
             setEditingQuotation(null)
@@ -187,76 +179,17 @@ export default function Quotations() {
             setIsSaving(true)
             const quotation = convertingQuotation
 
-            // 1. Fetch items and current stock
-            const { data: qItems, error: itemsFetchErr } = await supabase
-                .from('quotation_items')
-                .select('*, products(name)')
-                .eq('quotation_id', quotation.id)
+            const { data: sale, error: convertError } = await supabase.rpc('convert_quotation_to_sale_v2', {
+                p_quotation_id: quotation.id,
+                p_payment_method: paymentData.paymentMethod,
+                p_amount_received: paymentData.amountPaid || quotation.total,
+                p_amount_change: paymentData.change || 0,
+                p_is_credit: paymentData.isCredit || false,
+                p_discount_extra: paymentData.discount || 0,
+                p_user_id: user.id
+            })
 
-            if (itemsFetchErr) throw itemsFetchErr
-            if (!qItems || qItems.length === 0) throw new Error('La cotización no tiene productos.')
-
-            // Validate stock before proceeding
-            const productIds = qItems.map(i => i.product_id)
-            const { data: stockData } = await supabase
-                .from('product_branch_settings')
-                .select('product_id, stock')
-                .in('product_id', productIds)
-                .eq('branch_id', quotation.branch_id)
-
-            const stockMap = {}
-            stockData?.forEach(s => stockMap[s.product_id] = s.stock)
-
-            for (const item of qItems) {
-                const available = stockMap[item.product_id] || 0
-                if (item.quantity > available) {
-                    throw new Error(`Stock insuficiente para "${item.products.name}". Disponible: ${available}, Requerido: ${item.quantity}`)
-                }
-            }
-
-            // 2. Get current user
-            const { data: { user } } = await supabase.auth.getUser()
-
-            // 3. Insert into Sales
-            const { data: sale, error: saleErr } = await supabase
-                .from('sales')
-                .insert([{
-                    customer_id: paymentData.customerId || quotation.customer_id,
-                    branch_id: quotation.branch_id,
-                    user_id: user.id,
-                    subtotal: quotation.subtotal,
-                    discount: (quotation.discount || 0) + (paymentData.discount || 0),
-                    tax: quotation.tax || 0,
-                    total: quotation.total - (paymentData.discount || 0),
-                    payment_method: paymentData.paymentMethod,
-                    amount_received: paymentData.amountPaid,
-                    amount_change: paymentData.change,
-                    is_credit: paymentData.isCredit
-                }])
-                .select().single()
-
-            if (saleErr) throw saleErr
-
-            // 4. Insert into Sale Items
-            const { error: saleItemsErr } = await supabase
-                .from('sale_items')
-                .insert(qItems.map(item => ({
-                    sale_id: sale.id,
-                    product_id: item.product_id,
-                    quantity: item.quantity,
-                    price: item.price,
-                    total: item.total
-                })))
-
-            if (saleItemsErr) throw saleItemsErr
-
-            // 5. Update Quotation Status
-            const { error: updateErr } = await supabase
-                .from('quotations')
-                .update({ status: 'Convertido' })
-                .eq('id', quotation.id)
-
-            if (updateErr) throw updateErr
+            if (convertError) throw convertError
 
             setIsCheckoutOpen(false)
             setConvertingQuotation(null)
@@ -288,7 +221,7 @@ export default function Quotations() {
             // Fetch items
             const { data: qItems, error } = await supabase
                 .from('quotation_items')
-                .select('*, products(name, sku)')
+                .select('*, products(name, sku, brand, model)')
                 .eq('quotation_id', quotation.id)
 
             if (error) throw error
@@ -372,7 +305,11 @@ export default function Quotations() {
                                 <tr>
                                     <td>
                                         <div style="font-weight: 600;">${item.products?.name || 'Producto'}</div>
-                                        <div style="color: #666; font-size: 10px;">sku: ${item.products?.sku || ''}</div>
+                                        <div style="color: #666; font-size: 10px;">
+                                            ${item.products?.brand ? `Marca: ${item.products.brand} | ` : ''}
+                                            ${item.products?.model ? `Modelo: ${item.products.model} | ` : ''}
+                                            sku: ${item.products?.sku || ''}
+                                        </div>
                                     </td>
                                     <td class="text-right">${item.quantity}</td>
                                     <td class="text-right">${currencySymbol}${item.price.toFixed(2)}</td>

@@ -133,15 +133,21 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
 
     const handleChange = (e) => {
         const { name, value, type } = e.target
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'number' ? parseFloat(value) || 0 : value
-        }))
+        setFormData(prev => {
+            let val = type === 'number' ? parseFloat(value) || 0 : value
+            if (type === 'number' && (name === 'price')) {
+                val = Math.max(0, val)
+            }
+            return {
+                ...prev,
+                [name]: val
+            }
+        })
     }
 
     const handleBranchSettingChange = (branchId, field, value) => {
         setBranchSettings(prev => prev.map(s =>
-            s.branch_id === branchId ? { ...s, [field]: parseFloat(value) || 0 } : s
+            s.branch_id === branchId ? { ...s, [field]: Math.max(0, parseFloat(value) || 0) } : s
         ))
     }
 
@@ -430,17 +436,18 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                             <label style={labelStyle}>Precio Base Sugerido ({currencySymbol}) ({product ? 'Referencial' : 'Opcional'})</label>
                                             <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
                                                 <span style={{ position: 'absolute', left: '10px', fontWeight: 'bold', opacity: 0.4 }}>{currencySymbol.includes('.') ? currencySymbol : currencySymbol + ' '}</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.01"
-                                                    name="price"
-                                                    value={formData.price === 0 ? '' : formData.price}
-                                                    onChange={handleChange}
-                                                    onFocus={(e) => !readOnly && e.target.select()}
-                                                    placeholder="0.00"
-                                                    style={{ ...inputStyle, paddingLeft: currencySymbol.length > 2 ? '3.2rem' : '1.8rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
-                                                    readOnly={readOnly}
-                                                />
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        name="price"
+                                                        value={formData.price === 0 ? '' : formData.price}
+                                                        onChange={handleChange}
+                                                        onFocus={(e) => !readOnly && e.target.select()}
+                                                        placeholder="0.00"
+                                                        style={{ ...inputStyle, paddingLeft: currencySymbol.length > 2 ? '3.2rem' : '1.8rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
+                                                        readOnly={readOnly}
+                                                    />
                                             </div>
                                         </div>
                                     </div>
@@ -577,12 +584,13 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                     </div>
                                                     <div style={inputWrapperStyle}>
                                                         <label style={labelStyle}>Mínimo</label>
-                                                        <input type="number" value={s.min_stock} onChange={(e) => handleBranchSettingChange(s.branch_id, 'min_stock', e.target.value)} readOnly={readOnly} style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }} />
+                                                        <input type="number" min="0" value={s.min_stock} onChange={(e) => handleBranchSettingChange(s.branch_id, 'min_stock', e.target.value)} readOnly={readOnly} style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }} />
                                                     </div>
                                                     <div style={inputWrapperStyle}>
                                                         <label style={labelStyle}>Precio ({currencySymbol})</label>
                                                         <input
                                                             type="number"
+                                                            min="0"
                                                             step="0.01"
                                                             placeholder="Base"
                                                             value={s.price === 0 ? '' : (s.price || '')}

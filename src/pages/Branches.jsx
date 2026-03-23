@@ -12,10 +12,38 @@ export default function Branches() {
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingBranch, setEditingBranch] = useState(null)
+    const [defaultBranchId, setDefaultBranchId] = useState(null)
 
     useEffect(() => {
         fetchBranches()
+        fetchDefaultBranch()
     }, [])
+
+    async function fetchDefaultBranch() {
+        const { data } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', 'default_purchase_branch')
+            .maybeSingle()
+        if (data) setDefaultBranchId(data.value)
+    }
+
+    async function setDefaultBranch(id) {
+        try {
+            const { error } = await supabase
+                .from('settings')
+                .upsert({ 
+                    key: 'default_purchase_branch', 
+                    value: id.toString(),
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'key' })
+            if (error) throw error
+            setDefaultBranchId(id.toString())
+        } catch (err) {
+            console.error('Error setting default branch:', err)
+            alert('Error al establecer la sucursal por defecto.')
+        }
+    }
 
     async function fetchBranches() {
         try {
@@ -176,7 +204,20 @@ export default function Branches() {
                                         </div>
                                     </div>
 
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <button
+                                            className="btn"
+                                            title={defaultBranchId === branch.id.toString() ? "Sucursal principal para ingresos y traspasos" : "Establecer como principal para ingresos y traspasos"}
+                                            style={{
+                                                padding: '0.5rem',
+                                                color: defaultBranchId === branch.id.toString() ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground) / 0.4)',
+                                                backgroundColor: defaultBranchId === branch.id.toString() ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                                                borderRadius: '8px'
+                                            }}
+                                            onClick={() => setDefaultBranch(branch.id)}
+                                        >
+                                            <Building2 size={16} />
+                                        </button>
                                         <button
                                             className="btn"
                                             style={{ padding: '0.5rem', color: 'hsl(var(--secondary-foreground))' }}

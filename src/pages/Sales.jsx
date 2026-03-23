@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Plus, Search, ClipboardList, RefreshCw, AlertTriangle, Building2, Calendar, User, Eye, Edit2, Trash2, ShoppingCart, TrendingUp, DollarSign, Target, Filter, ChevronRight, X, Printer, Download } from 'lucide-react'
+import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import SaleModal from '../components/pos/SaleModal'
 import Ticket from '../components/pos/Ticket'
@@ -205,33 +206,29 @@ export default function Sales() {
                 return
             }
 
-            const headers = ['Orden,Cliente,NIT/CI,Sucursal,Vendedor,Fecha,Hora,Total']
-            const rows = filteredSales.map(s => {
-                const escape = (val) => `"${String(val || '').replace(/"/g, '""')}"`
-                return [
-                    escape(s.sale_number),
-                    escape(s.customers?.name || 'Cliente General'),
-                    escape(s.customers?.tax_id || ''),
-                    escape(s.branches?.name),
-                    escape(s.profiles?.full_name || 'Sistema'),
-                    escape(new Date(s.created_at).toLocaleDateString()),
-                    escape(new Date(s.created_at).toLocaleTimeString()),
-                    s.total
-                ].join(',')
-            })
+            const headers = ['Orden', 'Cliente', 'NIT/CI', 'Sucursal', 'Vendedor', 'Fecha', 'Hora', 'Total']
+            const rows = filteredSales.map(s => [
+                s.sale_number || '',
+                s.customers?.name || 'Cliente General',
+                s.customers?.tax_id || '',
+                s.branches?.name || '',
+                s.profiles?.full_name || 'Sistema',
+                new Date(s.created_at).toLocaleDateString(),
+                new Date(s.created_at).toLocaleTimeString(),
+                s.total || 0
+            ])
 
-            const csvContent = [headers, ...rows].join('\n')
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.setAttribute('href', url)
-            link.setAttribute('download', `ventas_export_${new Date().toLocaleDateString('sv-SE')}.csv`)
-            link.style.visibility = 'hidden'
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
+            const worksheet = utils.aoa_to_sheet([headers, ...rows])
+            const workbook = utils.book_new()
+            utils.book_append_sheet(workbook, worksheet, 'Ventas')
+
+            // Auto-size columns
+            const maxWidths = headers.map((h, i) => Math.max(h.length, ...rows.map(r => String(r[i]).length)))
+            worksheet['!cols'] = maxWidths.map(w => ({ wch: w + 2 }))
+
+            writeFile(workbook, `ventas_export_${new Date().toLocaleDateString('sv-SE')}.xlsx`)
         } catch (err) {
-            console.error('Error exporting CSV:', err)
+            console.error('Error exporting Excel:', err)
             alert('Error al exportar datos')
         }
     }

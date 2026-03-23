@@ -145,28 +145,21 @@ export default function POS() {
             const total = Math.max(0, subtotal + tax - discount)
 
             const { data: { user } } = await supabase.auth.getUser()
-            const { data: sale, error: saleError } = await supabase
-                .from('sales')
-                .insert([{
-                    subtotal, tax, total,
-                    discount: discount,
-                    payment_method: checkoutData?.paymentMethod,
-                    amount_received: checkoutData?.isCredit ? 0 : (checkoutData?.amountPaid || total),
-                    amount_change: checkoutData?.isCredit ? 0 : (checkoutData?.change || 0),
-                    branch_id: selectedBranchId,
-                    customer_id: checkoutData?.customerId || null,
-                    is_credit: checkoutData?.isCredit || false,
-                    user_id: user?.id
-                }])
-                .select().single()
+            const { data: sale, error: saleError } = await supabase.rpc('register_sale_v2', {
+                p_items: cart.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price })),
+                p_subtotal: subtotal,
+                p_tax: tax,
+                p_total: total,
+                p_discount: discount,
+                p_payment_method: checkoutData?.paymentMethod,
+                p_amount_received: checkoutData?.isCredit ? 0 : (checkoutData?.amountPaid || total),
+                p_amount_change: checkoutData?.isCredit ? 0 : (checkoutData?.change || 0),
+                p_branch_id: selectedBranchId,
+                p_customer_id: checkoutData?.customerId || null,
+                p_is_credit: checkoutData?.isCredit || false,
+                p_user_id: user?.id
+            })
             if (saleError) throw saleError
-            const { error: itemsError } = await supabase
-                .from('sale_items')
-                .insert(cart.map(item => ({
-                    sale_id: sale.id, product_id: item.id,
-                    quantity: item.quantity, price: item.price, total: item.price * item.quantity
-                })))
-            if (itemsError) throw itemsError
 
             // ELIMINADO: La actualización manual del saldo del cliente.
             // Ahora se encarga el trigger trg_sales_credit en la base de datos de forma automática y segura.

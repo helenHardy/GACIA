@@ -88,7 +88,7 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
         // Fetch items and their current stock
         const { data: itemsData } = await supabase
             .from('quotation_items')
-            .select('*, products(name, sku)')
+            .select('*, products(name, sku, brand, model)')
             .eq('quotation_id', quotation.id)
 
         if (itemsData && itemsData.length > 0) {
@@ -106,6 +106,8 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                 product_id: item.product_id,
                 name: item.products.name,
                 sku: item.products.sku,
+                brand: item.products.brand,
+                model: item.products.model,
                 quantity: item.quantity,
                 price: item.price,
                 stock: stockMap[item.product_id] || 0
@@ -404,7 +406,10 @@ export default function QuotationModal({ quotation, isSaving, onClose, onSave, c
                                         <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><User size={20} /></div>
                                         <div>
                                             <p style={{ fontSize: '0.9rem', fontWeight: '800', margin: 0 }}>{selectedCustomer.name}</p>
-                                            <p style={{ fontSize: '0.7rem', opacity: 0.5, margin: 0 }}>{selectedCustomer.tax_id || 'Sin NIT/CI'}</p>
+                                            <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: selectedCustomer.current_balance > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
+                                                Saldo: {currencySymbol}{parseFloat(selectedCustomer.current_balance || 0).toFixed(2)} 
+                                                {selectedCustomer.current_balance > 0 ? ' (Deuda)' : ' (Al día)'}
+                                            </p>
                                         </div>
                                     </div>
                                     <button onClick={() => { setSelectedCustomer(null); setFormData(prev => ({ ...prev, customer_id: '' })); }} className="btn" style={{ fontSize: '0.7rem', fontWeight: '800', color: 'hsl(var(--destructive))' }}>CAMBIAR</button>
