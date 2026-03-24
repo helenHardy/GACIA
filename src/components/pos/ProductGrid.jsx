@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { RefreshCw, Package, Tag, Plus } from 'lucide-react'
+import { RefreshCw, Package, Tag, Plus, Building2 } from 'lucide-react'
 
-export default function ProductGrid({ searchTerm, branchId, category, onAddToCart, currencySymbol = 'Bs.', refreshKey, viewMode = 'grid' }) {
+export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart, currencySymbol = 'Bs.', refreshKey, viewMode = 'grid', stockFilter = 'all' }) {
     const [products, setProducts] = useState([])
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
@@ -14,10 +14,14 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
 
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchTerm, category])
+    }, [searchTerm, brandId])
 
     async function fetchProducts() {
-        if (!branchId) return
+        if (!branchId || branchId === 'all') {
+            setProducts([])
+            setLoading(false)
+            return
+        }
         try {
             setLoading(true)
             const { data, error } = await supabase
@@ -52,8 +56,13 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
     const filteredProducts = products.filter(p => {
         const matchesSearch = (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-        const matchesCategory = category === 'Todos' || p.category?.name === category
-        return matchesSearch && matchesCategory
+        const matchesBrand = !brandId || brandId === 'all' || String(p.brand_id) === String(brandId)
+        
+        let matchesStock = true
+        if (stockFilter === 'in-stock') matchesStock = (p.stock > 0)
+        else if (stockFilter === 'out-of-stock') matchesStock = (p.stock <= 0)
+
+        return matchesSearch && matchesBrand && matchesStock
     })
 
     const totalPages = Math.ceil(filteredProducts.length / pageSize)
@@ -69,7 +78,15 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
             )}
 
             <div style={{ flex: 1 }}>
-                {filteredProducts.length === 0 && !loading ? (
+                {branchId === 'all' ? (
+                    <div style={{ padding: '6rem 2rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                            <Building2 size={40} />
+                        </div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '0.5rem' }}>Vista Global Activada</h3>
+                        <p style={{ opacity: 0.5, maxWidth: '300px' }}>Seleccione una sucursal específica en el encabezado para realizar ventas en el POS.</p>
+                    </div>
+                ) : filteredProducts.length === 0 && !loading ? (
                     <div style={{ padding: '6rem 2rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'hsl(var(--secondary) / 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', opacity: 0.5 }}>
                             <Package size={40} />
@@ -80,9 +97,9 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
                 ) : viewMode === 'grid' ? (
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                        gap: '1.25rem',
-                        paddingBottom: '2rem',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))',
+                        gap: '0.75rem',
+                        paddingBottom: '1.5rem',
                         opacity: loading ? 0.3 : 1,
                         transition: 'opacity 0.3s ease'
                     }}>
@@ -145,7 +162,7 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
                                     </div>
                                 )}
                                 <div style={{
-                                    height: '160px',
+                                    height: '130px',
                                     backgroundColor: 'hsl(var(--secondary) / 0.2)',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -198,7 +215,7 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
                                     </div>
                                 </div>
 
-                                <div style={{ padding: '1.25rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                <div style={{ padding: '0.85rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                     <div style={{ flex: 1 }}>
                                         <h3 style={{
                                             fontSize: '1rem',
@@ -226,7 +243,7 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
                                         </p>
                                     </div>
 
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid hsl(var(--border) / 0.3)', paddingTop: '0.75rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid hsl(var(--border) / 0.3)', paddingTop: '0.5rem' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                             <p style={{
                                                 color: 'hsl(var(--primary))',
@@ -265,10 +282,10 @@ export default function ProductGrid({ searchTerm, branchId, category, onAddToCar
                                 className="card"
                                 onClick={() => product.stock > 0 && onAddToCart(product)}
                                 style={{
-                                    padding: '0.75rem 1.25rem',
+                                    padding: '0.5rem 1rem',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '1.25rem',
+                                    gap: '1rem',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s',
                                     border: '1px solid hsl(var(--border) / 0.5)',

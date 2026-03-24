@@ -39,10 +39,10 @@ BEGIN
     p_payment_method, 
     p_amount_received, 
     p_amount_change, 
-    p_branch_id, 
-    p_customer_id, 
+    p_branch_id::BIGINT, 
+    p_customer_id::BIGINT, 
     p_is_credit, 
-    p_user_id
+    p_user_id::UUID
   )
   RETURNING id INTO v_sale_id;
 

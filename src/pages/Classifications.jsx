@@ -11,7 +11,9 @@ import {
     Layers,
     Save,
     X,
-    AlertCircle
+    AlertCircle,
+    Image as ImageIcon,
+    Upload
 } from 'lucide-react'
 import { inventoryService } from '../services/inventoryService'
 
@@ -23,6 +25,7 @@ export default function Classifications() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingItem, setEditingItem] = useState(null)
     const [isSaving, setIsSaving] = useState(false)
+    const [brandLogoFile, setBrandLogoFile] = useState(null)
 
     // Specific data for Models view
     const [brands, setBrands] = useState([])
@@ -77,6 +80,7 @@ export default function Classifications() {
             brand_id: item?.brand_id || (brands.length > 0 ? brands[0].id : ''),
             logo_url: item?.logo_url || ''
         })
+        setBrandLogoFile(null)
         setIsModalOpen(true)
     }
 
@@ -90,8 +94,13 @@ export default function Classifications() {
                 if (editingItem) await inventoryService.updateCategory(editingItem.id, formData.name)
                 else await inventoryService.createCategory(formData.name)
             } else if (activeTab === 'brands') {
-                if (editingItem) await inventoryService.updateBrand(editingItem.id, formData.name, formData.logo_url)
-                else await inventoryService.createBrand(formData.name, formData.logo_url)
+                let logoUrl = formData.logo_url
+                if (brandLogoFile) {
+                    logoUrl = await inventoryService.uploadBrandLogo(brandLogoFile)
+                }
+
+                if (editingItem) await inventoryService.updateBrand(editingItem.id, formData.name, logoUrl)
+                else await inventoryService.createBrand(formData.name, logoUrl)
             } else if (activeTab === 'models') {
                 if (editingItem) await inventoryService.updateModel(editingItem.id, formData.name, formData.brand_id)
                 else await inventoryService.createModel(formData.name, formData.brand_id)
@@ -209,13 +218,24 @@ export default function Classifications() {
                     ) : (
                         filteredItems.map(item => (
                             <div key={item.id} className="card hover:shadow-md transition-shadow" style={{ padding: '1.25rem', borderRadius: '16px', border: '1px solid hsl(var(--border) / 0.4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white' }}>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>{item.name}</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    {activeTab === 'brands' && (
+                                        <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                                            {item.logo_url ? (
+                                                <img src={item.logo_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                            ) : (
+                                                <ImageIcon size={20} style={{ opacity: 0.3 }} />
+                                            )}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>{item.name}</h3>
                                     {activeTab === 'models' && (
                                         <span style={{ fontSize: '0.75rem', opacity: 0.6, display: 'block', marginTop: '0.25rem' }}>
                                             {getBrandName(item.brand_id)}
                                         </span>
                                     )}
+                                    </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     <button onClick={() => handleOpenModal(item)} className="btn hover:bg-secondary" style={{ padding: '0.5rem', borderRadius: '8px', color: 'hsl(var(--primary))' }}>
@@ -268,6 +288,55 @@ export default function Classifications() {
                                             <option key={b.id} value={b.id}>{b.name}</option>
                                         ))}
                                     </select>
+                                </div>
+                            )}
+
+                            {activeTab === 'brands' && (
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.9rem' }}>Logo de la Marca</label>
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <div style={{ 
+                                            width: '80px', 
+                                            height: '80px', 
+                                            borderRadius: '16px', 
+                                            backgroundColor: 'hsl(var(--secondary) / 0.4)', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center', 
+                                            overflow: 'hidden',
+                                            border: '2px dashed hsl(var(--border) / 0.5)'
+                                        }}>
+                                            {brandLogoFile ? (
+                                                <img src={URL.createObjectURL(brandLogoFile)} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                            ) : formData.logo_url ? (
+                                                <img src={formData.logo_url} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                            ) : (
+                                                <ImageIcon size={32} style={{ opacity: 0.2 }} />
+                                            )}
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <label className="btn" style={{ 
+                                                display: 'inline-flex', 
+                                                alignItems: 'center', 
+                                                gap: '0.5rem', 
+                                                padding: '0.6rem 1rem', 
+                                                borderRadius: '10px', 
+                                                backgroundColor: 'hsl(var(--secondary) / 0.7)', 
+                                                cursor: 'pointer',
+                                                fontSize: '0.85rem',
+                                                fontWeight: '700'
+                                            }}>
+                                                <Upload size={16} /> Subir Logo
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    style={{ display: 'none' }} 
+                                                    onChange={(e) => setBrandLogoFile(e.target.files[0])}
+                                                />
+                                            </label>
+                                            <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.4rem' }}>PNG, JPG. Max 2MB.</p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

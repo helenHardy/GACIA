@@ -5,28 +5,28 @@ import ProductGrid from '../components/pos/ProductGrid'
 import Cart from '../components/pos/Cart'
 import CheckoutModal from '../components/pos/CheckoutModal'
 import Ticket from '../components/pos/Ticket'
+import { useBranch } from '../context/BranchContext'
 
 export default function POS() {
     const [cart, setCart] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
-    const [branches, setBranches] = useState([])
-    const [selectedBranchId, setSelectedBranchId] = useState(null)
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
     const [isProcessing, setIsProcessing] = useState(false)
     const [paymentMethod, setPaymentMethod] = useState('Efectivo')
     const [lastSale, setLastSale] = useState(null)
     const [showTicket, setShowTicket] = useState(false)
-    const [categories, setCategories] = useState(['Todos'])
-    const [selectedCategory, setSelectedCategory] = useState('Todos')
+    const [brands, setBrands] = useState([{ id: 'all', name: 'Todos' }])
+    const [selectedBrandId, setSelectedBrandId] = useState('all')
     const [taxSettings, setTaxSettings] = useState({ enable_tax: true, tax_rate: 13, tax_name: 'IVA' })
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [gridRefreshKey, setGridRefreshKey] = useState(0)
     const [viewMode, setViewMode] = useState('list') // 'grid' or 'list'
+    const [stockFilter, setStockFilter] = useState('in-stock') // 'all', 'in-stock', 'out-of-stock'
+    const { selectedBranchId, branches } = useBranch()
     const ticketRef = useRef()
 
     useEffect(() => {
-        fetchBranches()
-        fetchCategories()
+        fetchBrands()
         fetchSettings()
     }, [])
 
@@ -55,28 +55,9 @@ export default function POS() {
         setCurrencySymbol(symbol)
     }
 
-    async function fetchCategories() {
-        const { data } = await supabase.from('categories').select('name').order('name')
-        if (data) setCategories(['Todos', ...data.map(c => c.name)])
-    }
-
-    async function fetchBranches() {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-        const isAdmin = profile?.role === 'Administrador'
-        let query = supabase.from('branches').select('*').eq('active', true).order('name')
-        if (!isAdmin) {
-            const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
-            const assignedIds = assignments?.map(a => a.branch_id) || []
-            if (assignedIds.length > 0) query = query.in('id', assignedIds)
-            else return setBranches([])
-        }
-        const { data } = await query
-        if (data && data.length > 0) {
-            setBranches(data)
-            setSelectedBranchId(data[0].id)
-        }
+    async function fetchBrands() {
+        const { data } = await supabase.from('brands').select('*').order('name')
+        if (data) setBrands([{ id: 'all', name: 'Todos' }, ...data])
     }
 
     const addToCart = (product) => {
@@ -137,16 +118,20 @@ export default function POS() {
 
     const handleCheckout = async (checkoutData) => {
         try {
-            if (!selectedBranchId) return alert('Seleccione una sucursal')
+            if (!selectedBranchId || selectedBranchId === 'all') return alert('Seleccione una sucursal específica para vender.')
             setIsProcessing(true)
             const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
             const tax = taxSettings.enable_tax ? (subtotal * (taxSettings.tax_rate / 100)) : 0
             const discount = checkoutData?.discount || 0
             const total = Math.max(0, subtotal + tax - discount)
 
+            const branchIdNum = Number(selectedBranchId)
+            const customerIdNum = checkoutData?.customerId ? Number(checkoutData?.customerId) : null
+
             const { data: { user } } = await supabase.auth.getUser()
-            const { data: sale, error: saleError } = await supabase.rpc('register_sale_v2', {
-                p_items: cart.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price })),
+            
+            const rpcArgs = {
+                p_items: cart.map(item => ({ product_id: Number(item.id), quantity: item.quantity, price: item.price })),
                 p_subtotal: subtotal,
                 p_tax: tax,
                 p_total: total,
@@ -154,17 +139,28 @@ export default function POS() {
                 p_payment_method: checkoutData?.paymentMethod,
                 p_amount_received: checkoutData?.isCredit ? 0 : (checkoutData?.amountPaid || total),
                 p_amount_change: checkoutData?.isCredit ? 0 : (checkoutData?.change || 0),
-                p_branch_id: selectedBranchId,
-                p_customer_id: checkoutData?.customerId || null,
+                p_branch_id: branchIdNum,
+                p_customer_id: customerIdNum,
                 p_is_credit: checkoutData?.isCredit || false,
-                p_user_id: user?.id
-            })
+                p_user_id: user?.id || null
+            }
+
+            console.log('Registrando venta con parámetros:', rpcArgs)
+
+            const { data: sale, error: saleError } = await supabase.rpc('register_sale_v2', rpcArgs)
             if (saleError) throw saleError
 
             // ELIMINADO: La actualización manual del saldo del cliente.
             // Ahora se encarga el trigger trg_sales_credit en la base de datos de forma automática y segura.
 
-            setLastSale({ sale, items: [...cart], branch: branches.find(b => b.id === selectedBranchId), customer: checkoutData?.customer || null, paymentMethod: checkoutData?.paymentMethod, currencySymbol })
+            setLastSale({ 
+                sale, 
+                items: [...cart], 
+                branch: branches.find(b => Number(b.id) === branchIdNum), 
+                customer: checkoutData?.customer || null, 
+                paymentMethod: checkoutData?.paymentMethod, 
+                currencySymbol 
+            })
             setShowTicket(true)
             setCart([])
             setIsCheckoutOpen(false)
@@ -191,9 +187,9 @@ export default function POS() {
         <div className="no-scrollbar" style={{
             display: 'grid',
             gridTemplateColumns: '1fr 420px',
-            gap: '1.5rem',
+            gap: '1rem',
             minHeight: '100vh',
-            padding: '1rem',
+            padding: '0.75rem',
             alignItems: 'start'
         }}>
             {isCheckoutOpen && (
@@ -226,8 +222,8 @@ export default function POS() {
             )}
 
             {/* Catalog Section */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                <div className="card shadow-sm" style={{ padding: '1.25rem', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid hsl(var(--border) / 0.6)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="card shadow-sm" style={{ padding: '1rem', borderRadius: '20px', display: 'flex', flexDirection: 'column', gap: '1rem', border: '1px solid hsl(var(--border) / 0.6)' }}>
                     <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                         <div style={{ position: 'relative', flex: 1 }}>
                             <Search size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
@@ -238,16 +234,6 @@ export default function POS() {
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', padding: '0.5rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', gap: '0.75rem' }}>
-                            <Building2 size={18} opacity={0.5} />
-                            <select
-                                style={{ background: 'transparent', border: 'none', fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', outline: 'none' }}
-                                value={selectedBranchId || ''}
-                                onChange={(e) => setSelectedBranchId(e.target.value)}
-                            >
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
                         </div>
 
                         <div style={{ display: 'flex', gap: '2px', backgroundColor: 'hsl(var(--secondary) / 0.4)', padding: '4px', borderRadius: '12px' }}>
@@ -291,6 +277,63 @@ export default function POS() {
                             </button>
                         </div>
 
+                        <div style={{ display: 'flex', gap: '2px', backgroundColor: 'hsl(var(--secondary) / 0.4)', padding: '4px', borderRadius: '12px' }}>
+                            <button
+                                onClick={() => setStockFilter('all')}
+                                className="btn-icon"
+                                title="Todos"
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: stockFilter === 'all' ? 'hsl(var(--background))' : 'transparent',
+                                    color: stockFilter === 'all' ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.4)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    boxShadow: stockFilter === 'all' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                TODOS
+                            </button>
+                            <button
+                                onClick={() => setStockFilter('in-stock')}
+                                className="btn-icon"
+                                title="Con Stock"
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: stockFilter === 'in-stock' ? 'hsl(var(--background))' : 'transparent',
+                                    color: stockFilter === 'in-stock' ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.4)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    boxShadow: stockFilter === 'in-stock' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                CON STOCK
+                            </button>
+                            <button
+                                onClick={() => setStockFilter('out-of-stock')}
+                                className="btn-icon"
+                                title="Sin Stock"
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    backgroundColor: stockFilter === 'out-of-stock' ? 'hsl(var(--background))' : 'transparent',
+                                    color: stockFilter === 'out-of-stock' ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.4)',
+                                    cursor: 'pointer',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    boxShadow: stockFilter === 'out-of-stock' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none'
+                                }}
+                            >
+                                SIN STOCK
+                            </button>
+                        </div>
+
                         <button
                             onClick={() => setGridRefreshKey(prev => prev + 1)}
                             className="btn"
@@ -301,29 +344,58 @@ export default function POS() {
                         </button>
                     </div>
 
-                    <div className="no-scrollbar" style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', scrollbarWidth: 'none' }}>
-                        {categories.map(cat => (
+                    <div className="no-scrollbar" style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', padding: '0.5rem 0.2rem 1rem', scrollbarWidth: 'none' }}>
+                        {brands.map(brand => (
                             <button
-                                key={cat}
-                                onClick={() => setSelectedCategory(cat)}
+                                key={brand.id}
+                                onClick={() => setSelectedBrandId(brand.id)}
                                 style={{
-                                    padding: '0.6rem 1.25rem',
-                                    borderRadius: '12px',
-                                    fontSize: '0.85rem',
-                                    fontWeight: '700',
-                                    whiteSpace: 'nowrap',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.2s',
-                                    backgroundColor: selectedCategory === cat ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
-                                    color: selectedCategory === cat ? 'white' : 'hsl(var(--foreground))',
+                                    flex: '0 0 auto',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    gap: '0.5rem'
+                                    gap: '0.75rem',
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: '16px',
+                                    border: '1px solid',
+                                    borderColor: selectedBrandId === brand.id ? 'hsl(var(--primary))' : 'hsl(var(--border) / 0.5)',
+                                    backgroundColor: selectedBrandId === brand.id ? 'hsl(var(--primary))' : 'hsl(var(--background))',
+                                    color: selectedBrandId === brand.id ? 'white' : 'hsl(var(--foreground))',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    boxShadow: selectedBrandId === brand.id ? '0 10px 15px -3px rgb(var(--primary) / 0.2)' : '0 2px 4px rgba(0,0,0,0.02)',
+                                    fontWeight: '700',
+                                    fontSize: '0.9rem'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (selectedBrandId !== brand.id) {
+                                        e.currentTarget.style.borderColor = 'hsl(var(--primary) / 0.3)'
+                                        e.currentTarget.style.transform = 'translateY(-2px)'
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (selectedBrandId !== brand.id) {
+                                        e.currentTarget.style.borderColor = 'hsl(var(--border) / 0.5)'
+                                        e.currentTarget.style.transform = 'none'
+                                    }
                                 }}
                             >
-                                {cat === 'Todos' ? <LayoutGrid size={14} /> : <Tag size={14} />}
-                                {cat}
+                                {brand.id === 'all' ? (
+                                    <LayoutGrid size={18} />
+                                ) : brand.logo_url ? (
+                                    <img 
+                                        src={brand.logo_url} 
+                                        alt={brand.name} 
+                                        style={{ 
+                                            width: '24px', 
+                                            height: '24px', 
+                                            objectFit: 'contain', 
+                                            filter: selectedBrandId === brand.id ? 'brightness(0) invert(1)' : 'none' 
+                                        }} 
+                                    />
+                                ) : (
+                                    <Tag size={18} opacity={0.6} />
+                                )}
+                                <span>{brand.name}</span>
                             </button>
                         ))}
                     </div>
@@ -333,11 +405,12 @@ export default function POS() {
                     <ProductGrid
                         searchTerm={searchTerm}
                         branchId={selectedBranchId}
-                        category={selectedCategory}
+                        brandId={selectedBrandId}
                         onAddToCart={addToCart}
                         currencySymbol={currencySymbol}
                         refreshKey={gridRefreshKey}
                         viewMode={viewMode}
+                        stockFilter={stockFilter}
                     />
                 </div>
             </div>
@@ -350,12 +423,9 @@ export default function POS() {
                 borderRadius: '24px',
                 overflow: 'hidden',
                 border: '1px solid hsl(var(--border) / 0.6)',
-                backgroundColor: 'hsl(var(--background))',
-                position: 'sticky',
-                top: '1rem',
-                maxHeight: 'calc(100vh - 2rem)'
+                backgroundColor: 'hsl(var(--background))'
             }}>
-                <div style={{ padding: '1.5rem', borderBottom: '1px solid hsl(var(--border) / 0.4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
+                <div style={{ padding: '1.25rem', borderBottom: '1px solid hsl(var(--border) / 0.4)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                         <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}><ShoppingCart size={20} /></div>
                         <h2 style={{ fontSize: '1.15rem', fontWeight: '800' }}>Orden Actual</h2>
@@ -363,7 +433,7 @@ export default function POS() {
                     <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: 'hsl(var(--primary))', color: 'white', padding: '4px 10px', borderRadius: '99px' }}>{cart.length} ITEMS</span>
                 </div>
 
-                <div className="no-scrollbar" style={{ flex: 1, overflowY: 'scroll', paddingRight: '0.25rem' }}>
+                <div className="no-scrollbar">
                     <Cart
                         items={cart}
                         onRemove={removeFromCart}
@@ -373,8 +443,8 @@ export default function POS() {
                     />
                 </div>
 
-                <div style={{ padding: '1.75rem', backgroundColor: 'hsl(var(--secondary) / 0.15)', borderTop: '1px solid hsl(var(--border) / 0.4)' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                <div style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.15)', borderTop: '1px solid hsl(var(--border) / 0.4)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', opacity: 0.6, fontWeight: '600' }}>
                             <span>Subtotal</span>
                             <span>{currencySymbol}{subtotal.toFixed(2)}</span>

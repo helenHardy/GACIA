@@ -177,10 +177,11 @@ export default function Quotations() {
     const handleConfirmConversion = async (paymentData) => {
         try {
             setIsSaving(true)
+            const { data: { user } } = await supabase.auth.getUser()
             const quotation = convertingQuotation
 
-            const { data: sale, error: convertError } = await supabase.rpc('convert_quotation_to_sale_v2', {
-                p_quotation_id: quotation.id,
+            const { data: sale, error: convertError } = await supabase.rpc('convert_quotation_to_sale_v9', {
+                p_quotation_id: String(quotation.id),
                 p_payment_method: paymentData.paymentMethod,
                 p_amount_received: paymentData.amountPaid || quotation.total,
                 p_amount_change: paymentData.change || 0,

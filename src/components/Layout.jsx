@@ -18,8 +18,10 @@ import {
     FileText,
     Layers,
     ChevronRight,
-    ChevronLeft
+    ChevronLeft,
+    MapPin
 } from 'lucide-react'
+import { useBranch } from '../context/BranchContext'
 import '../styles/layout.css'
 
 export default function Layout() {
@@ -31,6 +33,7 @@ export default function Layout() {
     const [loadingPermissions, setLoadingPermissions] = useState(true)
 
     const [collapsed, setCollapsed] = useState(false)
+    const { branches, selectedBranchId, setSelectedBranchId, loading: loadingBranches } = useBranch()
 
     useEffect(() => {
         async function fetchPermissions(role) {
@@ -223,7 +226,26 @@ export default function Layout() {
 
             <main className="main-content">
                 <header className="top-header">
-                    <h2 className="text-xl font-semibold">Bienvenido</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                        <h2 className="text-xl font-semibold">Bienvenido</h2>
+                        
+                        {!loadingBranches && branches.length > 0 && (
+                            <div className="global-branch-selector">
+                                <MapPin size={16} className="text-primary" />
+                                <span className="label">Sucursal:</span>
+                                <select 
+                                    className="branch-select"
+                                    value={selectedBranchId || ''}
+                                    onChange={(e) => setSelectedBranchId(Number(e.target.value))}
+                                >
+                                    {branches.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                    
                     <div className="user-menu">
                         <div className="avatar">
                             <span className="text-sm font-medium">{user?.email || 'Cargando...'}</span>

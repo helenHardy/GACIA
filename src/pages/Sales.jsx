@@ -4,6 +4,7 @@ import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import SaleModal from '../components/pos/SaleModal'
 import Ticket from '../components/pos/Ticket'
+import { useBranch } from '../context/BranchContext'
 
 
 export default function Sales() {
@@ -17,9 +18,9 @@ export default function Sales() {
     const [isSaving, setIsSaving] = useState(false)
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [saleForTicket, setSaleForTicket] = useState(null)
-    const [branches, setBranches] = useState([])
     const [isAdmin, setIsAdmin] = useState(false)
-    const [filterBranchId, setFilterBranchId] = useState('all')
+    const { selectedBranchId, branches } = useBranch()
+    const [filterBranchId, setFilterBranchId] = useState(selectedBranchId || 'all')
     const [filterMode, setFilterMode] = useState('day') // 'day', 'month', 'year', 'range'
     const [filterDay, setFilterDay] = useState(new Date().toLocaleDateString('sv-SE'))
     const [filterMonth, setFilterMonth] = useState((new Date().getMonth() + 1).toString())
@@ -40,7 +41,6 @@ export default function Sales() {
         checkUserRole()
         fetchSales()
         fetchSettings()
-        fetchBranches()
 
         const handleTicketEvent = (e) => handlePrint(e.detail)
         window.addEventListener('print-ticket', handleTicketEvent)
@@ -56,54 +56,13 @@ export default function Sales() {
     }
 
     useEffect(() => {
-        const savedBranch = localStorage.getItem('sales_branch')
-        const savedMode = localStorage.getItem('sales_mode')
-        if (savedBranch) setFilterBranchId(savedBranch)
-        if (savedMode) setFilterMode(savedMode)
-    }, [])
+        if (selectedBranchId) setFilterBranchId(selectedBranchId)
+    }, [selectedBranchId])
 
     useEffect(() => {
-        localStorage.setItem('sales_branch', filterBranchId)
         localStorage.setItem('sales_mode', filterMode)
-    }, [filterBranchId, filterMode])
+    }, [filterMode])
 
-    async function fetchBranches() {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            const isUserAdmin = profile?.role === 'Administrador'
-
-            let query = supabase.from('branches').select('*').eq('active', true).order('name')
-
-            if (!isUserAdmin) {
-                const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
-                const assignedIds = assignments?.map(a => a.branch_id) || []
-
-                if (assignedIds.length > 0) {
-                    query = query.in('id', assignedIds)
-                } else {
-                    setBranches([])
-                    return
-                }
-            }
-
-            const { data } = await query
-            setBranches(data || [])
-
-            // Set default selection
-            if (data && data.length > 0) {
-                if (filterBranchId === 'all' && !isUserAdmin) {
-                    setFilterBranchId(data[0].id)
-                } else if (!filterBranchId || (filterBranchId !== 'all' && !data.find(b => b.id === filterBranchId))) {
-                    setFilterBranchId(data[0].id)
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching branches:', err)
-        }
-    }
 
 
     async function fetchSettings() {
@@ -441,15 +400,13 @@ export default function Sales() {
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 2, alignItems: 'center' }}>
-                    {/* Sucursal Filter */}
+                    {/* Sucursal Filter - Synced with global but allowing local override if needed */}
                     <div style={{ minWidth: '180px' }}>
                         <select
-                            disabled={branches.length <= 1 && !isAdmin}
                             style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
                             value={filterBranchId}
                             onChange={(e) => setFilterBranchId(e.target.value)}
                         >
-                            {isAdmin && <option value="all">Todas las Sucursales</option>}
                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                         </select>
                     </div>
@@ -556,7 +513,8 @@ export default function Sales() {
 
                 <button
                     onClick={() => {
-                        setFilterBranchId('all');
+                        if (selectedBranchId) setFilterBranchId(selectedBranchId)
+                        else setFilterBranchId('all');
                         setFilterMode('day');
                         setFilterDay(getLocalDate(new Date()));
                         setFilterMonth((new Date().getMonth() + 1).toString());

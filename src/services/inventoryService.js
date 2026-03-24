@@ -95,5 +95,23 @@ export const inventoryService = {
 
         console.log('Generated Image URL:', data.publicUrl)
         return data.publicUrl
+    },
+
+    async uploadBrandLogo(file) {
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${Math.random()}.${fileExt}`
+        const filePath = `${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+            .from('brand-logos')
+            .upload(filePath, file)
+
+        if (uploadError) throw uploadError
+
+        const { data } = supabase.storage
+            .from('brand-logos')
+            .getPublicUrl(filePath)
+
+        return data.publicUrl
     }
 }

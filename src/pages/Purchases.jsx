@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Plus, Search, ClipboardList, RefreshCw, AlertTriangle, Truck, Building2, Calendar, User, Eye, Edit2, Trash2, ShoppingBag, ArrowUpRight, TrendingUp, CheckCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import PurchaseModal from '../components/inventory/PurchaseModal'
+import { useBranch } from '../context/BranchContext'
 
 export default function Purchases() {
     const [purchases, setPurchases] = useState([])
@@ -12,6 +13,7 @@ export default function Purchases() {
     const [isAdmin, setIsAdmin] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
     const [error, setError] = useState(null)
+    const { selectedBranchId } = useBranch()
 
     // UI state
     const [toast, setToast] = useState(null)
@@ -39,9 +41,12 @@ export default function Purchases() {
 
     useEffect(() => {
         checkUserRole()
-        fetchPurchases()
         fetchSettings()
     }, [])
+
+    useEffect(() => {
+        fetchPurchases()
+    }, [selectedBranchId])
 
     async function checkUserRole() {
         const { data: { user } } = await supabase.auth.getUser()
@@ -64,33 +69,19 @@ export default function Purchases() {
 
     async function fetchPurchases() {
         try {
-            setLoading(true)
-            setError(null)
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-            // 1. Get branch assignments
-            const { data: assignments } = await supabase
-                .from('user_branches')
-                .select('branch_id')
-                .eq('user_id', user.id)
-
-            const assignedIds = assignments?.map(a => a.branch_id) || []
-
-            // 2. Build query
             let query = supabase
                 .from('purchases')
                 .select(`
                     *,
-                    suppliers:supplier_id (name),
-                    branches:branch_id (name),
-                    profiles:profiles!fk_purchases_user (full_name)
+                    supplier:suppliers(name),
+                    branch:branches(name),
+                    creator:profiles!fk_purchases_user (full_name)
                 `)
                 .order('created_at', { ascending: false })
 
-            // Filter by branches if assigned
-            if (assignedIds.length > 0) {
-                query = query.in('branch_id', assignedIds)
+            // Filter by selected branch
+            if (selectedBranchId && selectedBranchId !== 'all') {
+                query = query.eq('branch_id', selectedBranchId)
             }
 
             const { data, error } = await query
@@ -208,8 +199,8 @@ export default function Purchases() {
                 total: item.total
             }))
 
-            const { data: purchaseId, error: rpcError } = await supabase.rpc('register_purchase_v2', {
-                p_purchase_id: editingPurchase?.id || null,
+            const { data: purchaseId, error: rpcError } = await supabase.rpc('register_purchase_v4', {
+                p_purchase_id: editingPurchase?.id || 0,
                 p_supplier_id: header.supplier_id,
                 p_branch_id: header.branch_id,
                 p_total: header.total,

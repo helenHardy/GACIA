@@ -15,15 +15,15 @@ export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity,
     }
 
     return (
-        <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ padding: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {items.map(item => (
                 <div
                     key={item.id}
                     style={{
                         display: 'flex',
-                        gap: '1rem',
+                        gap: '0.75rem',
                         alignItems: 'center',
-                        padding: '1rem',
+                        padding: '0.75rem',
                         backgroundColor: 'hsl(var(--background))',
                         borderRadius: '16px',
                         border: '1px solid hsl(var(--border) / 0.5)',

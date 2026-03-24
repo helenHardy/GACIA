@@ -5,11 +5,11 @@ import { supabase } from '../lib/supabase'
 import { inventoryService } from '../services/inventoryService'
 import ProductModal from '../components/inventory/ProductModal'
 import KardexDrawer from '../components/inventory/KardexDrawer'
+import { useBranch } from '../context/BranchContext'
 
 export default function Inventory() {
     const [products, setProducts] = useState([])
-    const [branches, setBranches] = useState([])
-    const [selectedBranchId, setSelectedBranchId] = useState('all')
+    const { selectedBranchId, setSelectedBranchId, branches } = useBranch()
     const [isAdmin, setIsAdmin] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
     const [loading, setLoading] = useState(true)
@@ -48,7 +48,6 @@ export default function Inventory() {
 
     useEffect(() => {
         checkUserRole()
-        fetchBranches()
         fetchSettings()
         fetchFilterOptions()
     }, [])
@@ -92,43 +91,6 @@ export default function Inventory() {
         fetchProducts()
     }, [selectedBranchId, showInactive])
 
-    async function fetchBranches() {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            const isUserAdmin = profile?.role === 'Administrador'
-
-            let query = supabase.from('branches').select('*').eq('active', true).order('name')
-
-            if (!isUserAdmin) {
-                const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
-                const assignedIds = assignments?.map(a => a.branch_id) || []
-
-                if (assignedIds.length > 0) {
-                    query = query.in('id', assignedIds)
-                } else {
-                    setBranches([])
-                    return
-                }
-            }
-
-            const { data } = await query
-            setBranches(data || [])
-
-            // Set default selection logic
-            if (data && data.length > 0) {
-                if (selectedBranchId === 'all' && !isUserAdmin) {
-                    setSelectedBranchId(data[0].id)
-                } else if (!selectedBranchId || (selectedBranchId !== 'all' && !data.find(b => b.id === selectedBranchId))) {
-                    setSelectedBranchId(data[0].id)
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching branches:', err)
-        }
-    }
 
     const handleExport = () => {
         const headers = ['SKU', 'Nombre', 'Categoría', 'Marca', 'Modelo', 'Precio', 'Stock', 'Mínimo']
@@ -194,7 +156,8 @@ export default function Inventory() {
             // Map data to handle easy access to current branch stock/price
             const mappedProducts = data.map(p => {
                 if (selectedBranchId === 'all') {
-                    return { ...p, current_stock: p.stock, current_price: p.price, current_min_stock: p.min_stock }
+                    const totalStock = (p.product_branch_settings || []).reduce((acc, s) => acc + (Number(s.stock) || 0), 0)
+                    return { ...p, current_stock: totalStock, current_price: p.price, current_min_stock: p.min_stock }
                 }
                 const s = p.settings ? p.settings[0] : null
                 return {
@@ -473,12 +436,10 @@ export default function Inventory() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
                     <Building2 size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
                     <select
-                        disabled={branches.length <= 1 && !isAdmin}
                         style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
-                        value={selectedBranchId}
-                        onChange={(e) => setSelectedBranchId(e.target.value)}
+                        value={selectedBranchId || ''}
+                        onChange={(e) => setSelectedBranchId(Number(e.target.value))}
                     >
-                        {isAdmin && <option value="all">Stock Global</option>}
                         {branches.map(b => (
                             <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
@@ -549,7 +510,9 @@ export default function Inventory() {
                         setSelectedModelId('')
                         setSearchTerm('')
                         setShowInactive(false)
-                        if (isAdmin) setSelectedBranchId('all')
+                        if (isAdmin) {
+                            // En inventario podrías querer volver a una sucursal por defecto o mantener la seleccionada
+                        }
                     }}
                     title="Limpiar Filtros"
                 >

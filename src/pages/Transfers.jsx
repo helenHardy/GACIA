@@ -3,6 +3,7 @@ import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle,
 import { supabase } from '../lib/supabase'
 import TransferModal from '../components/inventory/TransferModal'
 import TransferDetailModal from '../components/inventory/TransferDetailModal'
+import { useBranch } from '../context/BranchContext'
 
 export default function Transfers() {
     const [transfers, setTransfers] = useState([])
@@ -13,6 +14,7 @@ export default function Transfers() {
     const [isAdmin, setIsAdmin] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
     const [editingTransfer, setEditingTransfer] = useState(null)
+    const { selectedBranchId } = useBranch()
 
     // Toast state
     const [toast, setToast] = useState(null)
@@ -39,8 +41,11 @@ export default function Transfers() {
 
     useEffect(() => {
         checkUserRole()
-        fetchTransfers()
     }, [])
+
+    useEffect(() => {
+        fetchTransfers()
+    }, [selectedBranchId])
 
     async function checkUserRole() {
         const { data: { user } } = await supabase.auth.getUser()
@@ -75,25 +80,8 @@ export default function Transfers() {
                 `)
                 .order('created_at', { ascending: false })
 
-            // Fetch branches regardless of admin status to control UI buttons
-            const { data: assignments } = await supabase
-                .from('user_branches')
-                .select('branch_id')
-                .eq('user_id', user.id)
-
-            const assignedIds = assignments?.map(a => a.branch_id) || []
-            setUserBranchIds(assignedIds)
-
-            if (!isUserAdmin) {
-                if (assignedIds.length > 0) {
-                    // Filter where either origin or destination is in assigned branches
-                    query = query.or(`origin_branch_id.in.(${assignedIds.join(',')}),destination_branch_id.in.(${assignedIds.join(',')})`)
-                } else {
-                    setTransfers([])
-                    setStats({ pending: 0, inTransit: 0, received: 0 })
-                    setLoading(false)
-                    return
-                }
+            if (selectedBranchId && selectedBranchId !== 'all') {
+                query = query.or(`origin_branch_id.eq.${selectedBranchId},destination_branch_id.eq.${selectedBranchId}`)
             }
 
             const { data, error } = await query

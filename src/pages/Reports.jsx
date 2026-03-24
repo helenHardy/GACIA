@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { FileText, Calendar, Filter, Download, ChevronDown, DollarSign, Package, TrendingUp, BarChart3, PieChart, RefreshCw, ArrowUpRight, ArrowDownRight, CreditCard, ShoppingBag } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import SalesChart from '../components/dashboard/SalesChart'
+import { useBranch } from '../context/BranchContext'
 
 // Helper for date formatting
 const formatDate = (date) => date.toISOString().split('T')[0]
@@ -15,11 +16,11 @@ export default function Reports() {
         return formatDate(d)
     })
     const [endDate, setEndDate] = useState(() => formatDate(new Date()))
-    const [selectedBranch, setSelectedBranch] = useState('all')
+    const { selectedBranchId, branches: allBranches } = useBranch()
+    const [selectedBranch, setSelectedBranch] = useState(selectedBranchId || 'all')
 
     // Data State
     const [loading, setLoading] = useState(false)
-    const [branches, setBranches] = useState([])
     const [reportData, setReportData] = useState(null)
     const [activeTab, setActiveTab] = useState('sales') // 'sales', 'products', 'inventory'
 
@@ -28,7 +29,6 @@ export default function Reports() {
 
     useEffect(() => {
         checkUserRole()
-        fetchBranches()
     }, [])
 
     useEffect(() => {
@@ -68,57 +68,18 @@ export default function Reports() {
         }
     }, [startDate, endDate, selectedBranch, activeTab])
 
+    useEffect(() => {
+        if (selectedBranchId) setSelectedBranch(selectedBranchId)
+    }, [selectedBranchId])
+
     async function checkUserRole() {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
             const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
             setIsAdmin(data?.role === 'Administrador')
-            if (data?.role !== 'Administrador') {
-                // Fetch assigned branch to set default
-                const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id).single()
-                if (assignments) setSelectedBranch(assignments.branch_id)
-            }
         }
     }
 
-    async function fetchBranches() {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            const isUserAdmin = profile?.role === 'Administrador'
-
-            let query = supabase.from('branches').select('*').order('name')
-
-            if (!isUserAdmin) {
-                const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
-                const assignedIds = assignments?.map(a => a.branch_id) || []
-
-                if (assignedIds.length > 0) {
-                    query = query.in('id', assignedIds)
-                } else {
-                    setBranches([])
-                    return
-                }
-            }
-
-            const { data } = await query
-            setBranches(data || [])
-
-            // Set default selection
-            if (data && data.length > 0) {
-                // If previously selected 'all' but now restricted, or nothing selected
-                if (selectedBranch === 'all' && !isUserAdmin) {
-                    setSelectedBranch(data[0].id)
-                } else if (!selectedBranch || (selectedBranch !== 'all' && !data.find(b => b.id === selectedBranch))) {
-                    setSelectedBranch(data[0].id)
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching branches:', error)
-        }
-    }
 
     async function fetchReportData() {
         setLoading(true)
@@ -203,13 +164,11 @@ export default function Reports() {
                         <Filter size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
                         <select
                             className="btn"
-                            disabled={branches.length <= 1 && !isAdmin}
                             value={selectedBranch}
                             onChange={(e) => setSelectedBranch(e.target.value)}
                             style={{ width: '100%', paddingLeft: '2.5rem', justifyContent: 'space-between', backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
                         >
-                            {isAdmin && <option value="all">Todas las Sucursales</option>}
-                            {branches.map(b => (
+                            {allBranches.map(b => (
                                 <option key={b.id} value={b.id}>{b.name}</option>
                             ))}
                         </select>

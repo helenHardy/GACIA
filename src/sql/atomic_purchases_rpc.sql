@@ -1,30 +1,41 @@
-CREATE OR REPLACE FUNCTION public.register_purchase_v2(
-  p_purchase_id UUID,        -- NULL for new, non-NULL for edit
+-- CLEANUP OF PREVIOUS VERSIONS (Optional but recommended)
+-- DROP FUNCTION IF EXISTS public.register_purchase_v2(UUID, BIGINT, BIGINT, NUMERIC, UUID, JSONB);
+-- DROP FUNCTION IF EXISTS public.register_purchase_v3(TEXT, BIGINT, BIGINT, NUMERIC, TEXT, JSONB);
+-- DROP FUNCTION IF EXISTS public.register_purchase_v3(BIGINT, BIGINT, BIGINT, NUMERIC, TEXT, JSONB);
+
+CREATE OR REPLACE FUNCTION public.register_purchase_v4(
+  p_purchase_id BIGINT,      -- BIGINT for primary key
   p_supplier_id BIGINT,
   p_branch_id BIGINT,
   p_total NUMERIC,
-  p_user_id UUID,
+  p_user_id TEXT,            -- TEXT for UUID as a string
   p_items JSONB              -- Array of items: [{product_id, quantity, unit_cost, total}, ...]
-) RETURNS UUID AS $$
+) RETURNS BIGINT AS $$
 DECLARE
-  v_purchase_id UUID;
+  v_purchase_id BIGINT;
+  v_user_id UUID;
   v_item RECORD;
 BEGIN
+  -- Cast user ID safely
+  v_user_id := p_user_id::UUID;
+  
   -- 1. Create or Update Header
-  IF p_purchase_id IS NULL THEN
+  IF p_purchase_id IS NULL OR p_purchase_id = 0 THEN
     INSERT INTO public.purchases (supplier_id, branch_id, total, user_id)
-    VALUES (p_supplier_id, p_branch_id, p_total, p_user_id)
+    VALUES (p_supplier_id, p_branch_id, p_total, v_user_id)
     RETURNING id INTO v_purchase_id;
   ELSE
+    v_purchase_id := p_purchase_id;
+
     -- Delete old items first to trigger stock reversion
-    DELETE FROM public.purchase_items WHERE purchase_id = p_purchase_id;
+    DELETE FROM public.purchase_items WHERE purchase_id = v_purchase_id;
 
     UPDATE public.purchases 
     SET supplier_id = p_supplier_id,
         branch_id = p_branch_id,
         total = p_total,
-        user_id = p_user_id
-    WHERE id = p_purchase_id
+        user_id = v_user_id
+    WHERE id = v_purchase_id
     RETURNING id INTO v_purchase_id;
     
     IF v_purchase_id IS NULL THEN
