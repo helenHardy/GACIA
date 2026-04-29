@@ -356,17 +356,6 @@ export default function Sales() {
                     <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>Historial de Ventas</h1>
                     <p style={{ opacity: 0.5, fontWeight: '500' }}>Gestión integral de transacciones y facturación</p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button className="btn" onClick={fetchSales} disabled={loading} style={{ padding: '0.75rem', borderRadius: '14px', backgroundColor: 'hsl(var(--secondary) / 0.5)' }}>
-                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                    <button className="btn" onClick={handleExportCSV} style={{ padding: '0.75rem', borderRadius: '14px', backgroundColor: 'hsl(var(--secondary) / 0.5)' }} title="Exportar CSV">
-                        <Download size={20} />
-                    </button>
-                    <button className="btn btn-primary shadow-lg shadow-primary/20" onClick={() => { setEditingSale(null); setIsModalOpen(true); }} style={{ padding: '0.75rem 1.5rem', borderRadius: '14px', fontWeight: '800', gap: '0.5rem' }}>
-                        <Plus size={20} /> NUEVA VENTA
-                    </button>
-                </div>
             </div>
 
             {/* Metrics Dashboard */}
@@ -388,28 +377,8 @@ export default function Sales() {
             </div>
 
             <div className="card shadow-sm" style={{ padding: '1.25rem', borderRadius: '24px', border: '1px solid hsl(var(--border) / 0.6)', display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: '300px' }}>
-                    <Search size={20} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
-                    <input
-                        type="text"
-                        placeholder="Buscar por cliente, número de venta o ID..."
-                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '16px', border: 'none', fontSize: '0.95rem', outline: 'none' }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
 
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', flex: 2, alignItems: 'center' }}>
-                    {/* Sucursal Filter - Synced with global but allowing local override if needed */}
-                    <div style={{ minWidth: '180px' }}>
-                        <select
-                            style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
-                            value={filterBranchId}
-                            onChange={(e) => setFilterBranchId(e.target.value)}
-                        >
-                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
-                    </div>
 
                     <div style={{ width: '1px', height: '2rem', backgroundColor: 'hsl(var(--border) / 0.5)', margin: '0 0.5rem' }}></div>
 

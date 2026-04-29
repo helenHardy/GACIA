@@ -14,6 +14,8 @@ export default function Purchases() {
     const [isReadOnly, setIsReadOnly] = useState(false)
     const [error, setError] = useState(null)
     const { selectedBranchId } = useBranch()
+    const [branches, setBranches] = useState([])
+    const [isCasaMatriz, setIsCasaMatriz] = useState(false)
 
     // UI state
     const [toast, setToast] = useState(null)
@@ -42,7 +44,22 @@ export default function Purchases() {
     useEffect(() => {
         checkUserRole()
         fetchSettings()
+        fetchBranches()
     }, [])
+
+    useEffect(() => {
+        if (branches.length > 0) {
+            const current = branches.find(b => b.id === selectedBranchId)
+            setIsCasaMatriz(current?.name.toLowerCase().includes('casa matriz'))
+        } else {
+            setIsCasaMatriz(false)
+        }
+    }, [selectedBranchId, branches])
+
+    async function fetchBranches() {
+        const { data } = await supabase.from('branches').select('*').eq('active', true)
+        setBranches(data || [])
+    }
 
     useEffect(() => {
         fetchPurchases()
@@ -250,53 +267,39 @@ export default function Purchases() {
                     <h1 style={{ fontSize: '2rem', fontWeight: '800', letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>Historial de Compras</h1>
                     <p style={{ color: 'hsl(var(--secondary-foreground) / 0.6)', fontWeight: '500' }}>Abastecimiento de mercadería y control de costos</p>
                 </div>
-                <button
-                    className="btn btn-primary shadow-lg shadow-primary/20"
-                    onClick={() => {
-                        setEditingPurchase(null)
-                        setIsReadOnly(false)
-                        setIsModalOpen(true)
-                    }}
-                    style={{ borderRadius: '12px', padding: '0.75rem 1.5rem', fontWeight: '700', gap: '0.5rem' }}
-                >
-                    <Plus size={22} />
-                    Nueva Compra
-                </button>
+                {isCasaMatriz ? (
+                    <button
+                        className="btn btn-primary shadow-lg shadow-primary/20"
+                        onClick={() => {
+                            setEditingPurchase(null)
+                            setIsReadOnly(false)
+                            setIsModalOpen(true)
+                        }}
+                        style={{ borderRadius: '12px', padding: '0.75rem 1.5rem', fontWeight: '700', gap: '0.5rem' }}
+                    >
+                        <Plus size={22} />
+                        Nueva Compra
+                    </button>
+                ) : (
+                    <div style={{ backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '0.75rem 1.25rem', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '0.75rem', border: '1px solid hsl(var(--border) / 0.5)' }}>
+                        <AlertTriangle size={20} style={{ color: 'hsl(var(--primary))' }} />
+                        <span style={{ fontSize: '0.9rem', fontWeight: '600', opacity: 0.8 }}>
+                            Solo Casa Matriz puede registrar compras
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* Stats Overview */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '2.5rem' }}>
-                <div className="card shadow-sm" style={{ padding: '1.5rem', background: 'hsl(var(--primary) / 0.03)', border: '1px solid hsl(var(--primary) / 0.1)', borderRadius: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                        <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '10px' }}>
-                            <ShoppingBag size={20} />
-                        </div>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'hsl(142 76% 36%)', backgroundColor: 'hsl(142 76% 36% / 0.1)', padding: '2px 8px', borderRadius: '99px', alignSelf: 'center' }}>
-                            Este Mes
-                        </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem', marginBottom: '2.5rem' }}>
+                <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '1.5rem', background: 'hsl(var(--primary) / 0.03)', border: '1px solid hsl(var(--primary) / 0.1)' }}>
+                    <div style={{ padding: '0.75rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}>
+                        <ClipboardList size={28} />
                     </div>
-                    <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'hsl(var(--secondary-foreground) / 0.6)', margin: 0 }}>Total Invertido</p>
-                    <h3 style={{ fontSize: '1.75rem', fontWeight: '800', margin: '0.25rem 0' }}>{currencySymbol}{stats.totalMonth.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
-                </div>
-
-                <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                        <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--secondary))', color: 'hsl(var(--secondary-foreground))', borderRadius: '10px' }}>
-                            <ClipboardList size={20} />
-                        </div>
+                    <div>
+                        <p style={{ fontSize: '0.875rem', fontWeight: '700', color: 'hsl(var(--secondary-foreground) / 0.6)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Registros de Carga (Este Mes)</p>
+                        <h3 style={{ fontSize: '2rem', fontWeight: '900', margin: '0.25rem 0' }}>{stats.countMonth} <span style={{ fontSize: '1rem', fontWeight: '500', opacity: 0.5 }}>documentos</span></h3>
                     </div>
-                    <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'hsl(var(--secondary-foreground) / 0.6)', margin: 0 }}>Órdenes de Compra</p>
-                    <h3 style={{ fontSize: '1.75rem', fontWeight: '800', margin: '0.25rem 0' }}>{stats.countMonth} <span style={{ fontSize: '0.9rem', fontWeight: '500', opacity: 0.5 }}>registros</span></h3>
-                </div>
-
-                <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                        <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--secondary))', color: 'hsl(var(--secondary-foreground))', borderRadius: '10px' }}>
-                            <TrendingUp size={20} />
-                        </div>
-                    </div>
-                    <p style={{ fontSize: '0.875rem', fontWeight: '600', color: 'hsl(var(--secondary-foreground) / 0.6)', margin: 0 }}>Promedio por Compra</p>
-                    <h3 style={{ fontSize: '1.75rem', fontWeight: '800', margin: '0.25rem 0' }}>{currencySymbol}{stats.avgPurchase.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h3>
                 </div>
             </div>
 
@@ -329,24 +332,22 @@ export default function Purchases() {
                         <thead>
                             <tr style={{ backgroundColor: 'hsl(var(--secondary) / 0.2)' }}>
                                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5 }}>No. Orden</th>
-                                <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5 }}>Proveedor</th>
-                                <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5 }}>Sucursal / Usuario</th>
+                                <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5 }}>Sucursal / Operador</th>
                                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5 }}>Fecha</th>
-                                <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5 }}>Total Bruto</th>
                                 <th style={{ padding: '1.25rem 1.5rem', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.5, textAlign: 'right' }}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading && purchases.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" style={{ padding: '4rem', textAlign: 'center' }}>
+                                    <td colSpan="5" style={{ padding: '4rem', textAlign: 'center' }}>
                                         <RefreshCw size={40} className="animate-spin" style={{ margin: '0 auto', color: 'hsl(var(--primary))', opacity: 0.4 }} />
                                         <p style={{ marginTop: '1rem', fontWeight: '600', opacity: 0.4 }}>Cargando historial...</p>
                                     </td>
                                 </tr>
                             ) : filteredPurchases.length === 0 ? (
                                 <tr>
-                                    <td colSpan="6" style={{ padding: '5rem', textAlign: 'center' }}>
+                                    <td colSpan="5" style={{ padding: '5rem', textAlign: 'center' }}>
                                         <ShoppingBag size={64} style={{ margin: '0 auto 1.5rem', opacity: 0.1 }} />
                                         <p style={{ fontWeight: '600', fontSize: '1.1rem', opacity: 0.4 }}>No se encontraron ingresos de inventario</p>
                                     </td>
@@ -373,14 +374,6 @@ export default function Purchases() {
                                             </span>
                                         </td>
                                         <td style={{ padding: '1.25rem 1.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'hsl(var(--secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                    <Truck size={14} />
-                                                </div>
-                                                <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>{p.suppliers?.name || 'Sin Proveedor'}</span>
-                                            </div>
-                                        </td>
-                                        <td style={{ padding: '1.25rem 1.5rem' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: '600' }}>
                                                     <Building2 size={14} opacity={0.5} />
@@ -397,11 +390,6 @@ export default function Purchases() {
                                                 <Calendar size={14} opacity={0.5} />
                                                 {new Date(p.created_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </div>
-                                        </td>
-                                        <td style={{ padding: '1.25rem 1.5rem' }}>
-                                            <span style={{ fontWeight: '800', fontSize: '1.05rem', color: 'hsl(var(--foreground))' }}>
-                                                {currencySymbol}{p.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                            </span>
                                         </td>
                                         <td style={{ padding: '1.25rem 1.5rem' }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>

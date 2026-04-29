@@ -71,70 +71,40 @@ export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity,
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', backgroundColor: 'hsl(var(--secondary) / 0.3)', borderRadius: '12px', padding: '0.35rem', border: '1px solid hsl(var(--border) / 0.3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'hsl(var(--secondary) / 0.2)', borderRadius: '14px', padding: '0.4rem', border: '1px solid hsl(var(--border) / 0.4)' }}>
                         <button
                             className="btn"
-                            style={{
-                                width: '28px',
-                                height: '28px',
-                                padding: 0,
-                                borderRadius: '8px',
-                                backgroundColor: 'white',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                border: 'none'
-                            }}
+                            style={{ width: '32px', height: '32px', padding: 0, borderRadius: '10px', backgroundColor: 'white', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onClick={() => onUpdateQuantity(item.id, -1)}
                         >
                             <Minus size={14} />
                         </button>
                         <input
                             type="number"
-                            style={{
-                                width: '45px',
-                                fontSize: '0.9rem',
-                                fontWeight: '900',
-                                textAlign: 'center',
-                                backgroundColor: 'transparent',
-                                border: 'none',
-                                outline: 'none',
-                                padding: 0,
-                                MozAppearance: 'textfield'
-                            }}
-                            value={item.quantity === 0 ? '' : item.quantity}
+                            style={{ width: '45px', fontSize: '0.95rem', fontWeight: '900', textAlign: 'center', backgroundColor: 'transparent', border: 'none', outline: 'none' }}
+                            value={item.quantity}
                             onChange={(e) => onSetQuantity(item.id, parseInt(e.target.value) || 0)}
-                            onFocus={(e) => e.target.select()}
-                            onBlur={() => { if (item.quantity === 0) onSetQuantity(item.id, 1) }}
-                            min="0"
                         />
                         <button
                             className="btn"
                             disabled={item.quantity >= (item.stock || 0)}
-                            style={{
-                                width: '28px',
-                                height: '28px',
-                                padding: 0,
-                                borderRadius: '8px',
-                                backgroundColor: item.quantity >= (item.stock || 0) ? 'hsl(var(--secondary) / 0.5)' : 'white',
-                                boxShadow: item.quantity >= (item.stock || 0) ? 'none' : '0 2px 4px rgba(0,0,0,0.05)',
-                                border: 'none',
-                                cursor: item.quantity >= (item.stock || 0) ? 'not-allowed' : 'pointer',
-                                opacity: item.quantity >= (item.stock || 0) ? 0.5 : 1
-                            }}
+                            style={{ width: '32px', height: '32px', padding: 0, borderRadius: '10px', backgroundColor: item.quantity >= (item.stock || 0) ? 'hsl(var(--secondary) / 0.5)' : 'hsl(var(--primary))', color: item.quantity >= (item.stock || 0) ? 'inherit' : 'white', boxShadow: '0 4px 6px -1px rgb(var(--primary) / 0.2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onClick={() => onUpdateQuantity(item.id, 1)}
-                            title={item.quantity >= (item.stock || 0) ? 'Stock máximo alcanzado' : 'Aumentar cantidad'}
                         >
                             <Plus size={14} />
                         </button>
                     </div>
 
+                    <div style={{ textAlign: 'right', minWidth: '90px' }}>
+                        <p style={{ margin: 0, fontSize: '0.65rem', fontWeight: '800', opacity: 0.4, textTransform: 'uppercase' }}>Subtotal</p>
+                        <p style={{ margin: 0, fontSize: '1rem', fontWeight: '900', color: 'hsl(var(--primary))' }}>
+                            {currencySymbol}{(item.price * item.quantity).toFixed(2)}
+                        </p>
+                    </div>
+
                     <button
                         className="btn"
-                        style={{
-                            color: 'hsl(var(--destructive) / 0.5)',
-                            padding: '0.5rem',
-                            borderRadius: '10px',
-                            transition: 'all 0.2s ease'
-                        }}
+                        style={{ color: 'hsl(var(--destructive) / 0.5)', padding: '0.5rem', borderRadius: '10px' }}
                         onMouseEnter={(e) => e.currentTarget.style.color = 'hsl(var(--destructive))'}
                         onMouseLeave={(e) => e.currentTarget.style.color = 'hsl(var(--destructive) / 0.5)'}
                         onClick={() => onRemove(item.id)}

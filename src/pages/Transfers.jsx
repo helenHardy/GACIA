@@ -45,6 +45,22 @@ export default function Transfers() {
 
     useEffect(() => {
         fetchTransfers()
+
+        // Suscribirse a cambios en tiempo real para que la lista se actualice sola
+        const channel = supabase
+            .channel('transfers-live')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'transfers' 
+            }, () => {
+                fetchTransfers()
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [selectedBranchId])
 
     async function checkUserRole() {
@@ -52,6 +68,16 @@ export default function Transfers() {
         if (user) {
             const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
             setIsAdmin(data?.role === 'Administrador')
+
+            // Cargar las sucursales a las que el usuario tiene acceso
+            const { data: branches } = await supabase
+                .from('user_branches')
+                .select('branch_id')
+                .eq('user_id', user.id)
+            
+            if (branches) {
+                setUserBranchIds(branches.map(b => b.branch_id))
+            }
         }
     }
 
@@ -468,7 +494,7 @@ export default function Transfers() {
 
                                             <button onClick={() => setViewingTransfer(t)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'white', color: 'hsl(var(--foreground))', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }} title="Ver Detalle"><Eye size={14} /></button>
 
-                                            {(isAdmin || t.can_edit) ? (
+                                            {(isAdmin || t.can_edit) && t.status !== 'Recibido' ? (
                                                 <button onClick={() => handleEdit(t, false)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--primary) / 0.05)', color: 'hsl(var(--primary))', cursor: 'pointer' }} title="Modificar"><Edit2 size={14} /></button>
                                             ) : (
                                                 <button onClick={() => handleEdit(t, true)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--secondary) / 0.4)', color: 'hsl(var(--foreground) / 0.4)' }} title="Ver Lectura"><Edit2 size={14} opacity={0.5} /></button>
@@ -503,7 +529,7 @@ export default function Transfers() {
                                             <MapPin size={18} opacity={0.5} />
                                         </div>
                                         <p style={{ fontSize: '0.7rem', fontWeight: '700', opacity: 0.4, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Origen</p>
-                                        <p style={{ fontWeight: '800', fontSize: '0.95rem', margin: 0 }}>{t.origin?.name}</p>
+                                        <p style={{ fontWeight: '800', fontSize: '0.95rem', margin: 0, wordBreak: 'break-word' }}>{t.origin?.name}</p>
                                     </div>
 
                                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.2rem' }}>
@@ -527,7 +553,7 @@ export default function Transfers() {
                                             <MapPin size={18} />
                                         </div>
                                         <p style={{ fontSize: '0.7rem', fontWeight: '700', opacity: 0.4, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Destino</p>
-                                        <p style={{ fontWeight: '800', fontSize: '0.95rem', margin: 0 }}>{t.destination?.name}</p>
+                                        <p style={{ fontWeight: '800', fontSize: '0.95rem', margin: 0, wordBreak: 'break-word' }}>{t.destination?.name}</p>
                                     </div>
                                 </div>
 
@@ -563,8 +589,8 @@ export default function Transfers() {
 
                                 {/* Action Bar */}
                                 <div style={{ padding: '1rem 1.5rem', display: 'flex', gap: '0.75rem' }}>
-                                    {/* Action: PROCESS SEND (Origin Branch Only) */}
-                                    {t.status === 'Pendiente' && (isAdmin || userBranchIds.includes(t.origin_branch_id)) && (
+                                    {/* Action: PROCESS SEND */}
+                                    {t.status === 'Pendiente' && (
                                         <button
                                             className="btn btn-primary"
                                             style={{ flex: 1, borderRadius: '12px', padding: '0.7rem', fontWeight: '800', gap: '0.6rem', fontSize: '0.85rem' }}
@@ -575,8 +601,8 @@ export default function Transfers() {
                                         </button>
                                     )}
 
-                                    {/* Action: CONFIRM RECEPTION (Destination Branch Only) */}
-                                    {t.status === 'Enviado' && (isAdmin || userBranchIds.includes(t.destination_branch_id)) && (
+                                    {/* Action: CONFIRM RECEPTION */}
+                                    {t.status === 'Enviado' && (
                                         <button
                                             className="btn"
                                             style={{ flex: 1, backgroundColor: 'hsl(142 76% 36%)', color: 'white', borderRadius: '12px', padding: '0.7rem', fontWeight: '800', gap: '0.6rem', fontSize: '0.85rem' }}
@@ -587,8 +613,8 @@ export default function Transfers() {
                                         </button>
                                     )}
 
-                                    {/* Action: CANCEL (Origin Branch Only) */}
-                                    {(t.status === 'Pendiente' || t.status === 'Enviado') && (isAdmin || userBranchIds.includes(t.origin_branch_id)) && (
+                                    {/* Action: CANCEL */}
+                                    {(t.status === 'Pendiente' || t.status === 'Enviado') && (
                                         <button
                                             className="btn"
                                             style={{ borderRadius: '12px', padding: '0.7rem', width: '50px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }}

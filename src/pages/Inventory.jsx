@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle, Eye, Tag, Layers } from 'lucide-react'
+import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle, Eye, Tag, Layers, ArrowLeft, Image as ImageIcon } from 'lucide-react'
 import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { inventoryService } from '../services/inventoryService'
@@ -16,12 +16,12 @@ export default function Inventory() {
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
-    const [categories, setCategories] = useState([])
     const [brands, setBrands] = useState([])
     const [models, setModels] = useState([])
-    const [selectedCategoryId, setSelectedCategoryId] = useState('')
     const [selectedBrandId, setSelectedBrandId] = useState('')
     const [selectedModelId, setSelectedModelId] = useState('')
+    const [selectedBrand, setSelectedBrand] = useState(null)
+    const [brandProducts, setBrandProducts] = useState([])
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [showInactive, setShowInactive] = useState(false)
 
@@ -54,12 +54,10 @@ export default function Inventory() {
 
     async function fetchFilterOptions() {
         try {
-            const [cats, brs, mods] = await Promise.all([
-                inventoryService.getCategories(),
+            const [brs, mods] = await Promise.all([
                 inventoryService.getBrands(),
                 inventoryService.getModels()
             ])
-            setCategories(cats || [])
             setBrands(brs || [])
             setModels(mods || [])
         } catch (err) {
@@ -86,6 +84,19 @@ export default function Inventory() {
             else if (mapped.currency === 'USD') setCurrencySymbol('$')
         }
     }
+
+    useEffect(() => {
+        if (branches.length > 0 && (selectedBranchId === 'all' || !selectedBranchId)) {
+            const casaMatriz = branches.find(b => b.name.includes('Casa Matriz'))
+            if (casaMatriz) {
+                setSelectedBranchId(casaMatriz.id)
+            } else if (branches.length > 0) {
+                // If Casa Matriz not found, select the first real branch
+                const firstBranch = branches.find(b => b.id !== 'all')
+                if (firstBranch) setSelectedBranchId(firstBranch.id)
+            }
+        }
+    }, [branches, selectedBranchId])
 
     useEffect(() => {
         fetchProducts()
@@ -131,7 +142,7 @@ export default function Inventory() {
                     product_branch_settings(*)
                 `)
 
-            if (selectedBranchId !== 'all') {
+            if (selectedBranchId && selectedBranchId !== 'all') {
                 // Filter by specific branch using the join table
                 query = supabase
                     .from('products')
@@ -302,9 +313,8 @@ export default function Inventory() {
             (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
         )
-        .filter(p => !selectedCategoryId || p.category_id === selectedCategoryId)
         .filter(p => !selectedBrandId || p.brand_id === selectedBrandId)
-        .filter(p => !selectedModelId || p.model_id === selectedModelId)
+        .filter(p => !selectedBrand || p.brand_id === selectedBrand.id)
 
     return (
         <div style={{ position: 'relative', paddingBottom: '2rem' }}>
@@ -383,141 +393,95 @@ export default function Inventory() {
                     onClose={() => setViewingKardexProduct(null)}
                 />
             )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <div>
-                    <h1 style={{ fontSize: '1.875rem', fontWeight: 'bold' }}>Inventario</h1>
-                    <p style={{ color: 'hsl(var(--secondary-foreground))' }}>Gestión de productos y existencias</p>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem' }}>
-                    <button
-                        className="btn"
-                        onClick={handleExport}
-                        style={{ backgroundColor: 'hsl(var(--secondary))', gap: '0.5rem' }}
-                        title="Exportar a CSV"
+            
+            {/* Branch Selector Bar (Sucursales) */}
+            <div style={{ 
+                display: 'flex', 
+                gap: '0.75rem', 
+                overflowX: 'auto', 
+                paddingBottom: '1rem', 
+                msOverflowStyle: 'none', 
+                scrollbarWidth: 'none',
+                borderBottom: '1px solid hsl(var(--border) / 0.3)',
+                marginBottom: '1rem'
+            }}>
+                {branches.filter(b => b.id !== 'all' && b.name !== 'Todas las Sucursales').map(b => (
+                    <button 
+                        key={b.id}
+                        onClick={() => setSelectedBranchId(b.id)}
+                        style={{
+                            padding: '0.6rem 1.5rem',
+                            borderRadius: '100px',
+                            backgroundColor: selectedBranchId === b.id ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                            color: selectedBranchId === b.id ? 'white' : 'inherit',
+                            border: 'none',
+                            fontSize: '0.9rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
                     >
-                        <Download size={20} />
-                        Exportar
+                        <Building2 size={16} />
+                        {b.name}
                     </button>
-                    <button
-                        className="btn"
-                        onClick={fetchProducts}
-                        disabled={loading}
-                        style={{ backgroundColor: 'hsl(var(--secondary))' }}
-                    >
-                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
-                    </button>
-                    <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-                        <Plus size={20} style={{ marginRight: '0.5rem' }} />
-                        Nuevo Producto
-                    </button>
-                </div>
+                ))}
             </div>
 
-            <div className="card" style={{ marginBottom: '2rem', display: 'flex', gap: '1rem', padding: '1rem', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                    <Search size={20} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--secondary-foreground))' }} />
-                    <input
-                        type="text"
-                        placeholder="Buscar por nombre o SKU..."
-                        className="btn"
-                        style={{
-                            width: '100%',
-                            paddingLeft: '2.5rem',
-                            backgroundColor: 'hsl(var(--secondary))',
-                            cursor: 'text',
-                            justifyContent: 'flex-start'
-                        }}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            {/* Quick Access Brand Bar (Only when brand selected) */}
+            {selectedBrand && (
+                <div style={{ 
+                    display: 'flex', 
+                    gap: '0.75rem', 
+                    overflowX: 'auto', 
+                    paddingBottom: '0.5rem', 
+                    marginBottom: '1rem',
+                    msOverflowStyle: 'none', 
+                    scrollbarWidth: 'none',
+                    borderBottom: '1px solid hsl(var(--border) / 0.3)'
+                }}>
+                    {brands.filter(b => products.some(p => p.brand_id === b.id && p.current_stock > 0)).map(b => (
+                        <button 
+                            key={b.id}
+                            onClick={() => setSelectedBrand(b)}
+                            style={{
+                                padding: '0.5rem 1.25rem',
+                                borderRadius: '100px',
+                                backgroundColor: selectedBrand?.id === b.id ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                                color: selectedBrand?.id === b.id ? 'white' : 'inherit',
+                                border: 'none',
+                                fontSize: '0.85rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            {b.name}
+                        </button>
+                    ))}
                 </div>
+            )}
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
-                    <Building2 size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
-                    <select
-                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
-                        value={selectedBranchId || ''}
-                        onChange={(e) => setSelectedBranchId(Number(e.target.value))}
-                    >
-                        {branches.map(b => (
-                            <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                    </select>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {selectedBrand && (
+                        <button className="btn-icon" onClick={() => setSelectedBrand(null)} style={{ padding: '0.5rem', borderRadius: '50%', backgroundColor: 'hsl(var(--secondary) / 0.5)', border: 'none', cursor: 'pointer' }}>
+                            <ArrowLeft size={24} />
+                        </button>
+                    )}
+                    <div>
+                        <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>
+                            {selectedBrand ? selectedBrand.name : 'Inventario'}
+                        </h1>
+                        <p style={{ opacity: 0.5, fontWeight: '500', margin: 0 }}>
+                            {selectedBrand ? `Productos de la marca ${selectedBrand.name}` : 'Gestión de existencias por sucursal'}
+                        </p>
+                    </div>
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
-                    <Layers size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
-                    <select
-                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
-                        value={selectedCategoryId}
-                        onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    >
-                        <option value="">Categoría: Todas</option>
-                        {categories.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
-                    <Tag size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
-                    <select
-                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
-                        value={selectedBrandId}
-                        onChange={(e) => {
-                            setSelectedBrandId(e.target.value)
-                            setSelectedModelId('')
-                        }}
-                    >
-                        <option value="">Marca: Todas</option>
-                        {brands.map(b => (
-                            <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.6rem', borderRadius: '10px' }}>
-                    <Layers size={16} style={{ color: 'hsl(var(--secondary-foreground))', opacity: 0.6 }} />
-                    <select
-                        style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}
-                        value={selectedModelId}
-                        onChange={(e) => setSelectedModelId(e.target.value)}
-                        disabled={!selectedBrandId}
-                    >
-                        <option value="">Modelo: Todos</option>
-                        {(selectedBrandId ? models.filter(m => m.brand_id === selectedBrandId) : models).map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <button
-                    className="btn"
-                    style={{ backgroundColor: showInactive ? 'hsl(var(--primary) / 0.1)' : 'hsl(var(--secondary))', padding: '0.4rem 0.8rem', borderRadius: '10px', color: showInactive ? 'hsl(var(--primary))' : 'inherit' }}
-                    onClick={() => setShowInactive(!showInactive)}
-                    title={showInactive ? "Ocultar Inactivos" : "Mostrar Inactivos"}
-                >
-                    <Eye size={16} />
-                </button>
-
-                <button
-                    className="btn"
-                    style={{ backgroundColor: 'hsl(var(--secondary))', padding: '0.4rem 0.8rem', borderRadius: '10px' }}
-                    onClick={() => {
-                        setSelectedCategoryId('')
-                        setSelectedBrandId('')
-                        setSelectedModelId('')
-                        setSearchTerm('')
-                        setShowInactive(false)
-                        if (isAdmin) {
-                            // En inventario podrías querer volver a una sucursal por defecto o mantener la seleccionada
-                        }
-                    }}
-                    title="Limpiar Filtros"
-                >
-                    <RefreshCw size={16} />
-                </button>
             </div>
 
             {error && (
@@ -529,7 +493,8 @@ export default function Inventory() {
                 </div>
             )}
 
-            <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative', minHeight: '200px' }}>
+            {selectedBrand ? (
+                <div className="card" style={{ padding: 0, overflow: 'hidden', position: 'relative', minHeight: '200px' }}>
                 {loading && (
                     <div style={{
                         position: 'absolute',
@@ -606,7 +571,7 @@ export default function Inventory() {
                                     <td style={{ padding: '1rem' }}>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                                             <span style={{ padding: '2px 10px', backgroundColor: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '600', color: 'hsl(var(--secondary-foreground))' }}>
-                                                {product.category?.name || 'Gral'}
+                                                Gral
                                             </span>
                                             {product.brand?.name && (
                                                 <span style={{ padding: '2px 10px', backgroundColor: 'hsl(var(--primary) / 0.08)', color: 'hsl(var(--primary))', border: '1px solid hsl(var(--primary) / 0.15)', borderRadius: '6px', fontSize: '0.7rem', fontWeight: '700' }}>
@@ -769,6 +734,43 @@ export default function Inventory() {
                     </tbody>
                 </table>
             </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '1.5rem' }}>
+                    {brands.filter(brand => products.some(p => p.brand_id === brand.id && p.current_stock > 0)).map(brand => (
+                        <div 
+                            key={brand.id} 
+                            className="card hover:shadow-lg transition-all" 
+                            style={{ 
+                                padding: '1.5rem', 
+                                borderRadius: '24px', 
+                                border: '1px solid hsl(var(--border) / 0.4)', 
+                                display: 'flex', 
+                                flexDirection: 'column',
+                                alignItems: 'center', 
+                                gap: '1rem',
+                                backgroundColor: 'white',
+                                cursor: 'pointer',
+                                textAlign: 'center'
+                            }}
+                            onClick={() => setSelectedBrand(brand)}
+                        >
+                            <div style={{ width: '80px', height: '80px', borderRadius: '20px', backgroundColor: 'hsl(var(--secondary) / 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                {brand.logo_url ? (
+                                    <img src={brand.logo_url} alt={brand.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                ) : (
+                                    <ImageIcon size={32} style={{ opacity: 0.3 }} />
+                                )}
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '800' }}>{brand.name}</h3>
+                                <p style={{ fontSize: '0.85rem', opacity: 0.5, marginTop: '0.25rem' }}>
+                                    {products.filter(p => p.brand_id === brand.id).length} Productos
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

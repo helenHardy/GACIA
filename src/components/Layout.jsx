@@ -19,8 +19,10 @@ import {
     Layers,
     ChevronRight,
     ChevronLeft,
-    MapPin
+    MapPin,
+    Bell
 } from 'lucide-react'
+import NotificationBell from './NotificationBell'
 import { useBranch } from '../context/BranchContext'
 import '../styles/layout.css'
 
@@ -116,7 +118,6 @@ export default function Layout() {
         { to: '/quotations', icon: <FileText size={20} />, label: 'Cotizaciones', key: 'quotations' },
         { to: '/inventory', icon: <Package size={20} />, label: 'Inventario', key: 'inventory' },
         { to: '/branches', icon: <Building2 size={20} />, label: 'Sucursales', key: 'branches' },
-        { to: '/suppliers', icon: <Truck size={20} />, label: 'Proveedores', key: 'suppliers' },
         { to: '/purchases', icon: <ClipboardList size={20} />, label: 'Cargar Inventario', key: 'purchases' },
         { to: '/transfers', icon: <ArrowLeftRight size={20} />, label: 'Traspasos', key: 'transfers' },
         { to: '/reports', icon: <FileText size={20} />, label: 'Reportes', key: 'reports' },
@@ -246,10 +247,14 @@ export default function Layout() {
                         )}
                     </div>
                     
-                    <div className="user-menu">
+                    <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <NotificationBell />
+                        
+                        <div className="user-menu">
                         <div className="avatar">
                             <span className="text-sm font-medium">{user?.email || 'Cargando...'}</span>
                         </div>
+                    </div>
                     </div>
                 </header>
 

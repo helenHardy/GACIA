@@ -7,7 +7,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
     const [formData, setFormData] = useState({
         name: '',
         sku: '',
-        category_id: '',
         brand_id: '',
         model_id: '',
         description: '',
@@ -15,15 +14,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         image_url: '',
         active: true
     })
-    const [categories, setCategories] = useState([])
-    const [brands, setBrands] = useState([])
-    const [models, setModels] = useState([])
-    const [isAddingCategory, setIsAddingCategory] = useState(false)
-    const [isAddingBrand, setIsAddingBrand] = useState(false)
-    const [isAddingModel, setIsAddingModel] = useState(false)
-    const [newCategoryName, setNewCategoryName] = useState('')
-    const [newBrandName, setNewBrandName] = useState('')
-    const [newModelName, setNewModelName] = useState('')
     const [uploadingImage, setUploadingImage] = useState(false)
     const [branchSettings, setBranchSettings] = useState([])
     const [branches, setBranches] = useState([])
@@ -39,10 +29,8 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
-            const [branchesReq, brandsData, categoriesData, profileReq, assignmentsReq] = await Promise.all([
+            const [branchesReq, profileReq, assignmentsReq] = await Promise.all([
                 supabase.from('branches').select('*').eq('active', true),
-                inventoryService.getBrands(),
-                inventoryService.getCategories(),
                 supabase.from('profiles').select('role').eq('id', user.id).single(),
                 supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
             ])
@@ -57,8 +45,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             }
 
             setBranches(allBranches)
-            setBrands(brandsData || [])
-            setCategories(categoriesData || [])
         } catch (err) {
             console.error('Error fetching initial data:', err)
         } finally {
@@ -71,7 +57,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             setFormData({
                 name: product.name || '',
                 sku: product.sku || '',
-                category_id: product.category_id || '',
                 brand_id: product.brand_id || '',
                 model_id: product.model_id || '',
                 description: product.description || '',
@@ -80,28 +65,20 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                 active: product.active ?? true
             })
             fetchProductBranchSettings()
-            if (product.brand_id) {
-                fetchModels(product.brand_id)
-            }
         }
     }, [product, branches])
 
-    async function fetchModels(brandId) {
-        try {
-            const data = await inventoryService.getModels(brandId)
-            setModels(data || [])
-        } catch (err) {
-            console.error('Error fetching models:', err)
-        }
-    }
-
     async function fetchProductBranchSettings() {
-        if (!product) return
         try {
-            const { data } = await supabase
-                .from('product_branch_settings')
-                .select('*')
-                .eq('product_id', product.id)
+            let data = []
+            if (product?.id) {
+                const { data: existingData, error } = await supabase
+                    .from('product_branch_settings')
+                    .select('*')
+                    .eq('product_id', product.id)
+                if (error) throw error
+                data = existingData || []
+            }
 
             const settings = branches.map(branch => {
                 const existing = data?.find(s => s.branch_id === branch.id)
@@ -176,19 +153,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         }
     }
 
-    const handleAddCategory = async () => {
-        if (!newCategoryName.trim()) return
-        try {
-            const category = await inventoryService.createCategory(newCategoryName.trim())
-            setCategories(prev => [...prev, category].sort((a, b) => a.name.localeCompare(b.name)))
-            setFormData(prev => ({ ...prev, category_id: category.id }))
-            setNewCategoryName('')
-            setIsAddingCategory(false)
-        } catch (err) {
-            console.error(err)
-            setError('Error al crear categoría')
-        }
-    }
 
     const handleAddModel = async () => {
         if (!newModelName.trim() || !formData.brand_id) return
@@ -223,16 +187,18 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         e.preventDefault()
         if (!formData.name) {
             setError('El nombre del producto es obligatorio')
+            alert('El nombre del producto es obligatorio')
             return
         }
 
         const dataToSave = {
             ...formData,
-            category_id: formData.category_id || null,
+            sku: formData.sku?.trim() || null,
             brand_id: formData.brand_id || null,
             model_id: formData.model_id || null
         }
 
+        console.log('ProductModal: Saving data:', { ...dataToSave, branch_settings: branchSettings })
         onSave({ ...dataToSave, branch_settings: branchSettings })
     }
 
@@ -418,7 +384,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                         />
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
                                         <div style={inputWrapperStyle}>
                                             <label style={labelStyle}>SKU / Código</label>
                                             <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
@@ -432,117 +398,10 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                                 />
                                             </div>
                                         </div>
-                                        <div style={inputWrapperStyle}>
-                                            <label style={labelStyle}>Precio Base Sugerido ({currencySymbol}) ({product ? 'Referencial' : 'Opcional'})</label>
-                                            <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-                                                <span style={{ position: 'absolute', left: '10px', fontWeight: 'bold', opacity: 0.4 }}>{currencySymbol.includes('.') ? currencySymbol : currencySymbol + ' '}</span>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        name="price"
-                                                        value={formData.price === 0 ? '' : formData.price}
-                                                        onChange={handleChange}
-                                                        onFocus={(e) => !readOnly && e.target.select()}
-                                                        placeholder="0.00"
-                                                        style={{ ...inputStyle, paddingLeft: currencySymbol.length > 2 ? '3.2rem' : '1.8rem', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
-                                                        readOnly={readOnly}
-                                                    />
-                                            </div>
-                                        </div>
                                     </div>
-
-                                    <div style={inputWrapperStyle}>
-                                        <label style={labelStyle}>Descripción Detallada</label>
-                                        <textarea
-                                            name="description"
-                                            value={formData.description}
-                                            onChange={handleChange}
-                                            placeholder="Detalles sobre materiales, dimensiones, uso..."
-                                            style={{ ...inputStyle, minHeight: '80px', resize: 'vertical', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
-                                            readOnly={readOnly}
-                                        />
-                                    </div>
-
-                                    {product && (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
-                                            <input
-                                                type="checkbox"
-                                                id="product_active"
-                                                name="active"
-                                                checked={formData.active}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-                                                disabled={readOnly}
-                                                style={{ width: '18px', height: '18px', cursor: readOnly ? 'default' : 'pointer' }}
-                                            />
-                                            <label htmlFor="product_active" style={{ fontSize: '0.9rem', fontWeight: '600', cursor: readOnly ? 'default' : 'pointer' }}>
-                                                Producto Activo (Visible en Inventario y POS)
-                                            </label>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
 
-                            {/* Middle Section: Categorization */}
-                            <div style={{ gridColumn: 'span 12', padding: '1.5rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderRadius: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-
-                                <div style={inputWrapperStyle}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <label style={labelStyle}><Layers size={14} style={{ marginRight: 4 }} /> Categoría</label>
-                                        {!readOnly && <button type="button" onClick={() => setIsAddingCategory(true)} style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+ Nueva</button>}
-                                    </div>
-                                    {isAddingCategory ? (
-                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                            <input autoFocus value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="Nombre..." />
-                                            <button type="button" onClick={handleAddCategory} className="btn btn-primary" style={{ padding: '0 0.5rem' }}><Save size={16} /></button>
-                                            <button type="button" onClick={() => setIsAddingCategory(false)} className="btn btn-secondary" style={{ padding: '0 0.5rem' }}><X size={16} /></button>
-                                        </div>
-                                    ) : (
-                                        <select name="category_id" value={formData.category_id} onChange={handleChange} disabled={readOnly} style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}>
-                                            <option value="">Seleccionar...</option>
-                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
-                                    )}
-                                </div>
-
-                                <div style={inputWrapperStyle}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <label style={labelStyle}><Tag size={14} style={{ marginRight: 4 }} /> Marca</label>
-                                        {!readOnly && <button type="button" onClick={() => setIsAddingBrand(true)} style={{ fontSize: '0.7rem', color: 'hsl(var(--primary))', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }}>+ Nueva</button>}
-                                    </div>
-                                    {isAddingBrand ? (
-                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                            <input autoFocus value={newBrandName} onChange={(e) => setNewBrandName(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="Nombre..." />
-                                            <button type="button" onClick={handleAddBrand} className="btn btn-primary" style={{ padding: '0 0.5rem' }}><Save size={16} /></button>
-                                            <button type="button" onClick={() => setIsAddingBrand(false)} className="btn btn-secondary" style={{ padding: '0 0.5rem' }}><X size={16} /></button>
-                                        </div>
-                                    ) : (
-                                        <select name="brand_id" value={formData.brand_id} onChange={handleBrandChange} disabled={readOnly} style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}>
-                                            <option value="">Seleccionar...</option>
-                                            {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                        </select>
-                                    )}
-                                </div>
-
-                                <div style={inputWrapperStyle}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <label style={labelStyle}><Layers size={14} style={{ marginRight: 4 }} /> Modelo</label>
-                                        {!readOnly && <button type="button" onClick={() => setIsAddingModel(true)} disabled={!formData.brand_id} style={{ fontSize: '0.7rem', color: formData.brand_id ? 'hsl(var(--primary))' : 'gray', border: 'none', background: 'none', cursor: formData.brand_id ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}>+ Nuevo</button>}
-                                    </div>
-                                    {isAddingModel ? (
-                                        <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                            <input autoFocus value={newModelName} onChange={(e) => setNewModelName(e.target.value)} style={{ ...inputStyle, flex: 1 }} placeholder="Nombre..." />
-                                            <button type="button" onClick={handleAddModel} className="btn btn-primary" style={{ padding: '0 0.5rem' }}><Save size={16} /></button>
-                                            <button type="button" onClick={() => setIsAddingModel(false)} className="btn btn-secondary" style={{ padding: '0 0.5rem' }}><X size={16} /></button>
-                                        </div>
-                                    ) : (
-                                        <select name="model_id" value={formData.model_id} onChange={handleChange} disabled={!formData.brand_id || readOnly} style={{ ...inputStyle, opacity: (!formData.brand_id || readOnly) ? 0.6 : 1, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}>
-                                            <option value="">{formData.brand_id ? 'Seleccionar...' : 'Elija Marca primero'}</option>
-                                            {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                        </select>
-                                    )}
-                                </div>
-                            </div>
 
 
                             {/* Bottom Section: Branch Settings */}
@@ -567,37 +426,40 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                 ) : (
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                         {branchSettings.map(s => (
-                                            <div key={s.branch_id} style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--background))', borderRadius: '12px', border: '1px solid hsl(var(--border))', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.75rem' }}>
-                                                    <Building2 size={16} style={{ opacity: 0.5 }} />
-                                                    <span style={{ fontSize: '0.9rem', fontWeight: '700' }}>{s.branch_name}</span>
+                                            <div key={s.branch_id} style={{ 
+                                                padding: '1.25rem', 
+                                                backgroundColor: 'hsl(var(--secondary) / 0.1)', 
+                                                borderRadius: '16px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'space-between',
+                                                gap: '1rem' 
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                    <Building2 size={20} style={{ color: 'hsl(var(--primary))' }} />
+                                                    <span style={{ fontSize: '1rem', fontWeight: '800' }}>{s.branch_name}</span>
                                                 </div>
-                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-                                                    <div style={inputWrapperStyle}>
-                                                        <label style={labelStyle}>Stock</label>
-                                                        <input
-                                                            type="number"
-                                                            value={s.stock}
-                                                            readOnly
-                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: 'hsl(var(--secondary) / 0.5)', cursor: 'not-allowed', opacity: 0.7 }}
-                                                        />
-                                                    </div>
-                                                    <div style={inputWrapperStyle}>
-                                                        <label style={labelStyle}>Mínimo</label>
-                                                        <input type="number" min="0" value={s.min_stock} onChange={(e) => handleBranchSettingChange(s.branch_id, 'min_stock', e.target.value)} readOnly={readOnly} style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }} />
-                                                    </div>
-                                                    <div style={inputWrapperStyle}>
-                                                        <label style={labelStyle}>Precio ({currencySymbol})</label>
+                                                <div style={{ width: '150px' }}>
+                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                                                        <span style={{ position: 'absolute', left: '12px', fontWeight: 'bold', opacity: 0.4, fontSize: '0.9rem' }}>{currencySymbol}</span>
                                                         <input
                                                             type="number"
                                                             min="0"
                                                             step="0.01"
-                                                            placeholder="Base"
+                                                            placeholder="0.00"
                                                             value={s.price === 0 ? '' : (s.price || '')}
                                                             onChange={(e) => handleBranchSettingChange(s.branch_id, 'price', e.target.value)}
                                                             onFocus={(e) => !readOnly && e.target.select()}
                                                             readOnly={readOnly}
-                                                            style={{ ...inputStyle, textAlign: 'center', backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.1)' : 'hsl(var(--background))' }}
+                                                            style={{ 
+                                                                ...inputStyle, 
+                                                                textAlign: 'right', 
+                                                                paddingLeft: '2.5rem',
+                                                                backgroundColor: readOnly ? 'transparent' : 'white',
+                                                                borderRadius: '12px',
+                                                                fontWeight: '800',
+                                                                fontSize: '1.1rem'
+                                                            }}
                                                         />
                                                     </div>
                                                 </div>

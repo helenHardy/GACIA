@@ -45,7 +45,7 @@ export default function Settings() {
             const { error } = await supabase.rpc('clean_database')
             if (error) throw error
 
-            alert('Base de datos limpiada correctamente. Solo el perfil admin@gmail.com ha sido conservado.')
+            alert('Base de datos limpiada correctamente. Solo admin@gmail.com y la sucursal Casa Matriz han sido conservados.')
             setShowCleanupConfirm(false)
             setCleanupConfirmInput('')
             window.location.reload() // Reload to refresh all application state
@@ -744,7 +744,7 @@ export default function Settings() {
                                     <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Zona de Peligro: Limpieza de Base de Datos</h3>
                                 </div>
                                 <p style={{ color: 'hsl(var(--destructive))', fontWeight: '600', marginBottom: '1.5rem' }}>
-                                    ¡Atención! Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, productos, clientes, compras y perfiles de usuario (excepto admin@gmail.com).
+                                    ¡Atención! Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, productos, clientes, compras, sucursales secundarias y perfiles de usuario (excepto admin@gmail.com y Casa Matriz).
                                 </p>
 
                                 {!showCleanupConfirm ? (
@@ -795,8 +795,8 @@ export default function Settings() {
                                 <h4 style={{ fontWeight: '600', marginBottom: '0.5rem' }}>¿Qué se conserva?</h4>
                                 <ul style={{ fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground) / 0.8)', paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                                     <li>Perfil principal: admin@gmail.com</li>
+                                    <li>Sucursal principal: Casa Matriz</li>
                                     <li>Configuración de la Empresa (Nombre, NIT, Dirección)</li>
-                                    <li>Estructura de Sucursales</li>
                                     <li>Roles y Permisos del sistema</li>
                                     <li>Configuraciones generales de facturación</li>
                                 </ul>

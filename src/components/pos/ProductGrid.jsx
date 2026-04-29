@@ -1,23 +1,24 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { RefreshCw, Package, Tag, Plus, Building2 } from 'lucide-react'
+import { RefreshCw, Package, Tag, Plus, Building2, Minus } from 'lucide-react'
 
-export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart, currencySymbol = 'Bs.', refreshKey, viewMode = 'grid', stockFilter = 'all' }) {
+export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart, currencySymbol = 'Bs.', refreshKey, viewMode = 'grid', stockFilter = 'all', excludeIds = [] }) {
     const [products, setProducts] = useState([])
+    const [rowQuantities, setRowQuantities] = useState({})
     const [loading, setLoading] = useState(true)
     const [currentPage, setCurrentPage] = useState(1)
     const pageSize = 10
 
     useEffect(() => {
         fetchProducts()
-    }, [branchId, refreshKey])
+    }, [branchId, brandId, refreshKey])
 
     useEffect(() => {
         setCurrentPage(1)
     }, [searchTerm, brandId])
 
     async function fetchProducts() {
-        if (!branchId || branchId === 'all') {
+        if (!branchId || branchId === 'all' || !brandId || brandId === 'all') {
             setProducts([])
             setLoading(false)
             return
@@ -28,7 +29,6 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                 .from('products')
                 .select(`
                     *,
-                    category:categories(name),
                     brand:brands(name),
                     model:models(name),
                     settings:product_branch_settings!inner(*)
@@ -62,7 +62,9 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
         if (stockFilter === 'in-stock') matchesStock = (p.stock > 0)
         else if (stockFilter === 'out-of-stock') matchesStock = (p.stock <= 0)
 
-        return matchesSearch && matchesBrand && matchesStock
+        const isExcluded = excludeIds.some(id => String(id) === String(p.id))
+        
+        return matchesSearch && matchesBrand && matchesStock && !isExcluded
     })
 
     const totalPages = Math.ceil(filteredProducts.length / pageSize)
@@ -85,6 +87,14 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                         </div>
                         <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '0.5rem' }}>Vista Global Activada</h3>
                         <p style={{ opacity: 0.5, maxWidth: '300px' }}>Seleccione una sucursal específica en el encabezado para realizar ventas en el POS.</p>
+                    </div>
+                ) : (!brandId || brandId === 'all') ? (
+                    <div style={{ padding: '6rem 2rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                            <Tag size={40} />
+                        </div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '0.5rem' }}>Seleccione una Marca</h3>
+                        <p style={{ opacity: 0.5, maxWidth: '300px' }}>Primero elija una marca del buscador para ver los productos disponibles.</p>
                     </div>
                 ) : filteredProducts.length === 0 && !loading ? (
                     <div style={{ padding: '6rem 2rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -211,7 +221,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                                         gap: '4px'
                                     }}>
                                         <Tag size={10} />
-                                        {product.category?.name || 'Gral.'}
+                                        Gral.
                                     </div>
                                 </div>
 
@@ -342,7 +352,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <span style={{ fontSize: '0.75rem', color: 'hsl(var(--primary))', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                            <Tag size={12} /> {product.category?.name || 'Gral.'}
+                                            <Tag size={12} /> Gral.
                                         </span>
                                         <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'hsl(var(--secondary-foreground) / 0.4)' }}>
                                             SKU: <span style={{ color: 'hsl(var(--secondary-foreground) / 0.8)' }}>{product.sku || 'N/A'}</span>
@@ -364,19 +374,67 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                                             {(product.price ?? 0).toFixed(2)}
                                         </p>
                                     </div>
-                                    <div style={{
-                                        width: '36px',
-                                        height: '36px',
-                                        borderRadius: '10px',
-                                        backgroundColor: product.stock > 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
-                                        color: 'white',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        boxShadow: product.stock > 0 ? '0 4px 6px -1px rgb(var(--primary) / 0.2)' : 'none'
-                                    }}>
-                                        <Plus size={20} />
+                                    {/* Local Quantity Selector for Catalog */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary) / 0.2)', padding: '0.3rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.4)' }}>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const current = rowQuantities[product.id] || 1;
+                                                if (current > 1) setRowQuantities(prev => ({ ...prev, [product.id]: current - 1 }));
+                                            }}
+                                            style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+                                        >
+                                            <Minus size={14} />
+                                        </button>
+                                        <input
+                                            type="number"
+                                            value={rowQuantities[product.id] === undefined ? 1 : rowQuantities[product.id] === 0 ? '' : rowQuantities[product.id]}
+                                            onChange={(e) => {
+                                                const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                                setRowQuantities(prev => ({ ...prev, [product.id]: isNaN(val) ? 0 : Math.min(product.stock, val) }));
+                                            }}
+                                            onFocus={(e) => e.target.select()}
+                                            onBlur={() => {
+                                                if (!rowQuantities[product.id] || rowQuantities[product.id] === 0) {
+                                                    setRowQuantities(prev => ({ ...prev, [product.id]: 1 }));
+                                                }
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            style={{ width: '40px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: '900', fontSize: '0.9rem', outline: 'none' }}
+                                        />
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const current = rowQuantities[product.id] || 1;
+                                                if (current < product.stock) setRowQuantities(prev => ({ ...prev, [product.id]: current + 1 }));
+                                            }}
+                                            style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', backgroundColor: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+                                        >
+                                            <Plus size={14} />
+                                        </button>
                                     </div>
+
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onAddToCart(product, rowQuantities[product.id] || 1);
+                                        }}
+                                        style={{
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '10px',
+                                            backgroundColor: product.stock > 0 ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                                            color: 'white',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            border: 'none',
+                                            cursor: product.stock > 0 ? 'pointer' : 'not-allowed',
+                                            boxShadow: product.stock > 0 ? '0 4px 6px -1px rgb(var(--primary) / 0.2)' : 'none'
+                                        }}
+                                    >
+                                        <Plus size={20} />
+                                    </button>
                                 </div>
                             </div>
                         ))}

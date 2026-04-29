@@ -113,5 +113,21 @@ export const inventoryService = {
             .getPublicUrl(filePath)
 
         return data.publicUrl
+    },
+
+    // PRODUCTS BY BRAND
+    async getProductsByBrand(brandId) {
+        const { data, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                brand:brands(name),
+                model:models(name),
+                settings:product_branch_settings(*)
+            `)
+            .eq('brand_id', brandId)
+            .order('name')
+        if (error) throw error
+        return data
     }
 }
