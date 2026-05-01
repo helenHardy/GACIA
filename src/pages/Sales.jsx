@@ -3,6 +3,7 @@ import { Plus, Search, ClipboardList, RefreshCw, AlertTriangle, Building2, Calen
 import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import SaleModal from '../components/pos/SaleModal'
+import EditSaleModal from '../components/pos/EditSaleModal'
 import Ticket from '../components/pos/Ticket'
 import { useBranch } from '../context/BranchContext'
 
@@ -15,6 +16,8 @@ export default function Sales() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingSale, setEditingSale] = useState(null)
     const [isReadOnly, setIsReadOnly] = useState(false)
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [editingSaleForEdit, setEditingSaleForEdit] = useState(null)
     const [isSaving, setIsSaving] = useState(false)
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [saleForTicket, setSaleForTicket] = useState(null)
@@ -193,7 +196,14 @@ export default function Sales() {
     }
 
     const handleEdit = async (sale, forceReadOnly = false) => {
+        if (!forceReadOnly && (isAdmin || sale.can_edit)) {
+            // Open POS-style edit modal (products only)
+            setEditingSaleForEdit(sale)
+            setIsEditModalOpen(true)
+            return
+        }
 
+        // Read-only view uses the old SaleModal
         try {
             setLoading(true)
             const { data: items, error } = await supabase.from('sale_items').select('*, products(name, sku)').eq('sale_id', sale.id)
@@ -207,7 +217,7 @@ export default function Sales() {
                 total: i.total
             }))
             setEditingSale({ ...sale, items: formattedItems })
-            setIsReadOnly(forceReadOnly || (!isAdmin && !sale.can_edit))
+            setIsReadOnly(true)
             setIsModalOpen(true)
         } catch (err) {
             console.error(err)
@@ -348,6 +358,63 @@ export default function Sales() {
                     currencySymbol={currencySymbol}
                     onClose={() => { setIsModalOpen(false); setEditingSale(null); setIsReadOnly(false); }}
                     onSave={handleSave}
+                />
+            )}
+
+            {isEditModalOpen && editingSaleForEdit && (
+                <EditSaleModal
+                    sale={editingSaleForEdit}
+                    isSaving={isSaving}
+                    currencySymbol={currencySymbol}
+                    onClose={() => { setIsEditModalOpen(false); setEditingSaleForEdit(null); }}
+                    onSave={async (saleData) => {
+                        try {
+                            setIsSaving(true)
+                            const { items, ...header } = saleData
+                            const { data: { user } } = await supabase.auth.getUser()
+                            const targetSaleId = editingSaleForEdit.id
+
+                            // Deduplicate items by product_id (merge quantities)
+                            const mergedItems = {}
+                            items.forEach(item => {
+                                const pid = String(item.product_id)
+                                if (mergedItems[pid]) {
+                                    mergedItems[pid].quantity += Number(item.quantity)
+                                    mergedItems[pid].total += Number(item.total)
+                                } else {
+                                    mergedItems[pid] = {
+                                        product_id: Number(item.product_id),
+                                        quantity: Number(item.quantity),
+                                        price: Number(item.price),
+                                        total: Number(item.total)
+                                    }
+                                }
+                            })
+                            const uniqueItems = Object.values(mergedItems)
+
+                            // Use atomic RPC to handle stock reversal + re-deduction in one transaction
+                            const { error: rpcError } = await supabase.rpc('modify_sale_items', {
+                                p_sale_id: String(targetSaleId),
+                                p_items: uniqueItems,
+                                p_subtotal: Number(header.subtotal),
+                                p_tax: Number(header.tax),
+                                p_discount: Number(header.discount),
+                                p_total: Number(header.total),
+                                p_user_id: user?.id ? String(user.id) : ''
+                            })
+
+                            if (rpcError) throw rpcError
+
+                            setIsEditModalOpen(false)
+                            setEditingSaleForEdit(null)
+                            fetchSales()
+                        } catch (err) {
+                            console.error(err)
+                            alert('Error al modificar la venta: ' + err.message)
+                        } finally {
+                            setIsSaving(false)
+                        }
+                    }}
                 />
             )}
 

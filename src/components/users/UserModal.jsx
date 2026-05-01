@@ -69,6 +69,12 @@ export default function UserModal({ user, onClose, onSave, isSaving }) {
 
     const handleSubmit = (e) => {
         e.preventDefault()
+        
+        if (formData.assigned_branches.length === 0) {
+            alert('DEBE ASIGNAR AL MENOS UNA SUCURSAL. Es obligatorio para que el usuario pueda visualizar datos en el sistema.')
+            return
+        }
+
         if (!user && (!formData.password || formData.password.length < 6)) {
             alert('La contraseña debe tener al menos 6 caracteres')
             return

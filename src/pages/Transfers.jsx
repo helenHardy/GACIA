@@ -95,6 +95,21 @@ export default function Transfers() {
             const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
             const isUserAdmin = profile?.role === 'Administrador'
 
+            // Obtener las sucursales asignadas al usuario
+            const { data: assignments } = await supabase
+                .from('user_branches')
+                .select('branch_id')
+                .eq('user_id', user.id)
+            
+            const myBranchIds = assignments?.map(a => a.branch_id) || []
+
+            if (myBranchIds.length === 0) {
+                setTransfers([])
+                calculateStats([])
+                setLoading(false)
+                return
+            }
+
             let query = supabase
                 .from('transfers')
                 .select(`
@@ -106,8 +121,15 @@ export default function Transfers() {
                 `)
                 .order('created_at', { ascending: false })
 
+            // Si hay una sucursal específica seleccionada, filtrar solo por esa
             if (selectedBranchId && selectedBranchId !== 'all') {
                 query = query.or(`origin_branch_id.eq.${selectedBranchId},destination_branch_id.eq.${selectedBranchId}`)
+            } else {
+                // Si no, filtrar por TODAS las sucursales asignadas al usuario
+                const orFilters = myBranchIds.map(id => 
+                    `origin_branch_id.eq.${id},destination_branch_id.eq.${id}`
+                ).join(',')
+                query = query.or(orFilters)
             }
 
             const { data, error } = await query
@@ -589,8 +611,8 @@ export default function Transfers() {
 
                                 {/* Action Bar */}
                                 <div style={{ padding: '1rem 1.5rem', display: 'flex', gap: '0.75rem' }}>
-                                    {/* Action: PROCESS SEND */}
-                                    {t.status === 'Pendiente' && (
+                                    {/* Action: PROCESS SEND - Solo desde la sucursal de ORIGEN */}
+                                    {t.status === 'Pendiente' && String(t.origin_branch_id) === String(selectedBranchId) && (
                                         <button
                                             className="btn btn-primary"
                                             style={{ flex: 1, borderRadius: '12px', padding: '0.7rem', fontWeight: '800', gap: '0.6rem', fontSize: '0.85rem' }}
@@ -601,8 +623,8 @@ export default function Transfers() {
                                         </button>
                                     )}
 
-                                    {/* Action: CONFIRM RECEPTION */}
-                                    {t.status === 'Enviado' && (
+                                    {/* Action: CONFIRM RECEPTION - Solo desde la sucursal de DESTINO */}
+                                    {t.status === 'Enviado' && String(t.destination_branch_id) === String(selectedBranchId) && (
                                         <button
                                             className="btn"
                                             style={{ flex: 1, backgroundColor: 'hsl(142 76% 36%)', color: 'white', borderRadius: '12px', padding: '0.7rem', fontWeight: '800', gap: '0.6rem', fontSize: '0.85rem' }}

@@ -315,6 +315,7 @@ export default function Inventory() {
         )
         .filter(p => !selectedBrandId || p.brand_id === selectedBrandId)
         .filter(p => !selectedBrand || p.brand_id === selectedBrand.id)
+        .filter(p => (p.current_stock || 0) > 0)
 
     return (
         <div style={{ position: 'relative', paddingBottom: '2rem' }}>

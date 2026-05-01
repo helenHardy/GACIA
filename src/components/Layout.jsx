@@ -234,15 +234,21 @@ export default function Layout() {
                             <div className="global-branch-selector">
                                 <MapPin size={16} className="text-primary" />
                                 <span className="label">Sucursal:</span>
-                                <select 
-                                    className="branch-select"
-                                    value={selectedBranchId || ''}
-                                    onChange={(e) => setSelectedBranchId(Number(e.target.value))}
-                                >
-                                    {branches.map(b => (
-                                        <option key={b.id} value={b.id}>{b.name}</option>
-                                    ))}
-                                </select>
+                                {branches.length > 1 ? (
+                                    <select 
+                                        className="branch-select"
+                                        value={selectedBranchId || ''}
+                                        onChange={(e) => setSelectedBranchId(Number(e.target.value))}
+                                    >
+                                        {branches.map(b => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <span style={{ fontWeight: '700', color: 'hsl(var(--foreground))', marginLeft: '0.5rem' }}>
+                                        {branches[0].name}
+                                    </span>
+                                )}
                             </div>
                         )}
                     </div>

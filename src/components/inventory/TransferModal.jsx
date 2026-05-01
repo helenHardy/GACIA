@@ -245,24 +245,40 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                     <div style={{ padding: '1rem 2rem', backgroundColor: 'hsl(var(--primary) / 0.02)', borderBottom: '1px solid hsl(var(--border) / 0.3)', display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.4, marginBottom: '0.4rem', display: 'block' }}>Sucursal Origen</label>
-                            <select 
-                                value={originBranch}
-                                onChange={(e) => setOriginBranch(e.target.value)}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.4)', fontWeight: '800', fontSize: '0.9rem' }}
-                            >
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
+                            {branches.length > 1 ? (
+                                <select 
+                                    value={originBranch}
+                                    onChange={(e) => setOriginBranch(e.target.value)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.4)', fontWeight: '800', fontSize: '0.9rem' }}
+                                >
+                                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                            ) : (
+                                <div style={{ padding: '0.6rem', fontWeight: '800', fontSize: '0.9rem', backgroundColor: 'white', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.2)' }}>
+                                    {branches[0]?.name}
+                                </div>
+                            )}
                         </div>
                         <div style={{ color: 'hsl(var(--primary) / 0.3)', marginTop: '1rem' }}><ArrowRight size={20} /></div>
                         <div style={{ flex: 1 }}>
                             <label style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.4, marginBottom: '0.4rem', display: 'block' }}>Sucursal Destino</label>
-                            <select 
-                                value={destBranch}
-                                onChange={(e) => setDestBranch(e.target.value)}
-                                style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.4)', fontWeight: '800', fontSize: '0.9rem' }}
-                            >
-                                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
+                            {branches.length > 1 ? (
+                                <select 
+                                    value={destBranch}
+                                    onChange={(e) => setDestBranch(e.target.value)}
+                                    style={{ width: '100%', padding: '0.6rem', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.4)', fontWeight: '800', fontSize: '0.9rem' }}
+                                >
+                                    {branches.map(b => (
+                                        <option key={b.id} value={b.id} disabled={b.id === originBranch}>
+                                            {b.name} {b.id === originBranch ? '(Origen)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div style={{ padding: '0.6rem', fontWeight: '800', fontSize: '0.9rem', backgroundColor: 'white', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.2)' }}>
+                                    {branches[0]?.name}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

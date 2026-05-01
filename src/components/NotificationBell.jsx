@@ -13,33 +13,67 @@ export default function NotificationBell() {
     const [user, setUser] = useState(null)
 
     useEffect(() => {
-        fetchNotifications()
-        
-        // Suscribirse a cambios en tiempo real
-        const channel = supabase
-            .channel('public:notifications')
-            .on('postgres_changes', { 
-                event: 'INSERT', 
-                schema: 'public', 
-                table: 'notifications' 
-            }, payload => {
-                console.log('Nueva notificación recibida:', payload)
-                setNotifications(prev => [payload.new, ...prev])
-                setUnreadCount(prev => prev + 1)
-                
-                // Mostrar alerta sonora o visual si se desea
-                if (Notification.permission === 'granted') {
-                    new Notification(payload.new.title, {
-                        body: payload.new.message
-                    })
-                }
-            })
-            .subscribe()
+        let channel;
+        async function setupRealtime() {
+            const { data: { user: currentUser } } = await supabase.auth.getUser();
+            if (!currentUser) return;
+            setUser(currentUser);
+
+            const { data: assignments } = await supabase
+                .from('user_branches')
+                .select('branch_id')
+                .eq('user_id', currentUser.id);
+            
+            const assignedIds = assignments?.map(a => a.branch_id) || [];
+
+            channel = supabase
+                .channel('notifications-realtime-' + currentUser.id)
+                .on('postgres_changes', { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'notifications' 
+                }, payload => {
+                    const newNotif = payload.new;
+                    const isForMe = newNotif.user_id === currentUser.id;
+                    const isForMyBranch = newNotif.branch_id && assignedIds.includes(newNotif.branch_id);
+                    
+                    if (isForMe || isForMyBranch) {
+                        setNotifications(prev => [newNotif, ...prev]);
+                        setUnreadCount(prev => prev + 1);
+                        if (Notification.permission === 'granted') {
+                            new Notification(newNotif.title, { body: newNotif.message });
+                        }
+                    }
+                })
+                .on('postgres_changes', {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'notifications'
+                }, payload => {
+                    const updated = payload.new;
+                    if (updated.cleared_by && updated.cleared_by.includes(currentUser.id)) {
+                        setNotifications(prev => prev.filter(n => n.id !== updated.id));
+                    } else {
+                        setNotifications(prev => prev.map(n => n.id === updated.id ? updated : n));
+                    }
+                })
+                .on('postgres_changes', {
+                    event: 'DELETE',
+                    schema: 'public',
+                    table: 'notifications'
+                }, payload => {
+                    setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
+                })
+                .subscribe();
+        }
+
+        setupRealtime();
+        fetchNotifications();
 
         return () => {
-            supabase.removeChannel(channel)
-        }
-    }, [])
+            if (channel) supabase.removeChannel(channel);
+        };
+    }, []);
 
     useEffect(() => {
         function handleClickOutside(event) {
@@ -157,7 +191,7 @@ export default function NotificationBell() {
     }
 
     return (
-        <div style={{ position: 'relative' }} ref={dropdownRef}>
+        <div style={{ position: 'relative', zIndex: 9999 }} ref={dropdownRef}>
             <button 
                 onClick={() => setIsOpen(!isOpen)}
                 style={{
@@ -208,7 +242,7 @@ export default function NotificationBell() {
                     borderRadius: '16px',
                     boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
                     border: '1px solid hsl(var(--border) / 0.4)',
-                    zIndex: 2000,
+                    zIndex: 99999,
                     overflow: 'hidden',
                     animation: 'slideIn 0.2s ease-out'
                 }}>

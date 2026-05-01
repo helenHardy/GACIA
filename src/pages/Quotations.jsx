@@ -125,35 +125,24 @@ export default function Quotations() {
             setIsSaving(true)
             const { data: { user } } = await supabase.auth.getUser()
 
-            const subtotal = items.reduce((acc, item) => acc + (item.price * item.quantity), 0)
-            const discount = parseFloat(formData.discount || 0)
-            const tax = parseFloat(formData.tax || 0)
-            const total = Math.max(0, subtotal + tax - discount)
-
-            const quotationData = {
-                ...formData,
-                customer_id: formData.customer_id ? parseInt(formData.customer_id) : null,
-                branch_id: formData.branch_id ? parseInt(formData.branch_id) : null,
-                user_id: user?.id,
-                subtotal,
-                discount,
-                tax,
-                total,
-                status: editingQuotation ? editingQuotation.status : 'Pendiente'
-            }
+            const { subtotal, discount, tax, total, customer_id, branch_id, valid_until, notes } = formData
 
             const { data, error: rpcError } = await supabase.rpc('register_quotation_v2', {
                 p_quotation_id: editingQuotation?.id || null,
-                p_items: items.map(item => ({ product_id: item.product_id, quantity: item.quantity, price: item.price })),
-                p_customer_id: formData.customer_id ? parseInt(formData.customer_id) : null,
-                p_branch_id: formData.branch_id ? parseInt(formData.branch_id) : null,
+                p_items: items.map(item => ({ 
+                    product_id: item.product_id || item.id, 
+                    quantity: Number(item.quantity), 
+                    price: Number(item.price) 
+                })),
+                p_customer_id: customer_id,
+                p_branch_id: branch_id,
                 p_user_id: user?.id,
                 p_subtotal: subtotal,
                 p_tax: tax || 0,
                 p_discount: discount || 0,
                 p_total: total,
-                p_valid_until: formData.valid_until || null,
-                p_notes: formData.notes || '',
+                p_valid_until: valid_until || null,
+                p_notes: notes || '',
                 p_status: editingQuotation ? editingQuotation.status : 'Pendiente'
             })
             if (rpcError) throw rpcError

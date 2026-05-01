@@ -18,7 +18,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
     }, [searchTerm, brandId])
 
     async function fetchProducts() {
-        if (!branchId || branchId === 'all' || !brandId || brandId === 'all') {
+        if (!branchId || branchId === 'all' || !brandId) {
             setProducts([])
             setLoading(false)
             return
@@ -88,7 +88,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                         <h3 style={{ fontSize: '1.25rem', fontWeight: '800', marginBottom: '0.5rem' }}>Vista Global Activada</h3>
                         <p style={{ opacity: 0.5, maxWidth: '300px' }}>Seleccione una sucursal específica en el encabezado para realizar ventas en el POS.</p>
                     </div>
-                ) : (!brandId || brandId === 'all') ? (
+                ) : (!brandId) ? (
                     <div style={{ padding: '6rem 2rem', textAlign: 'center', color: 'hsl(var(--secondary-foreground))', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
                             <Tag size={40} />
@@ -374,6 +374,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
                                             {(product.price ?? 0).toFixed(2)}
                                         </p>
                                     </div>
+
                                     {/* Local Quantity Selector for Catalog */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary) / 0.2)', padding: '0.3rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.4)' }}>
                                         <button

@@ -27,35 +27,36 @@ export function BranchProvider({ children }) {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-            const isAdmin = profile?.role === 'Administrador'
-
+            const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
+            const assignedIds = assignments?.map(a => a.branch_id) || []
+            
             let query = supabase.from('branches').select('*').eq('active', true).order('name')
             
-            if (!isAdmin) {
-                const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
-                const assignedIds = assignments?.map(a => a.branch_id) || []
-                if (assignedIds.length > 0) {
-                    query = query.in('id', assignedIds)
-                } else {
-                    setBranches([])
-                    setLoading(false)
-                    return
-                }
+            if (assignedIds.length > 0) {
+                query = query.in('id', assignedIds)
+            } else {
+                setBranches([])
+                setLoading(false)
+                return
             }
 
             const { data } = await query
             if (data && data.length > 0) {
-                const finalBranches = isAdmin ? [{ id: 'all', name: 'Todas las Sucursales' }, ...data] : data
+                const finalBranches = data
                 setBranches(finalBranches)
-                
+
+                // Prioritize "Casa Matriz" as default, otherwise use the first REAL branch (avoid "all")
+                const casaMatriz = data.find(b => b.name?.toLowerCase().includes('casa matriz'))
+                const defaultId = casaMatriz ? casaMatriz.id : data[0].id
+
                 // Usar localStorage para persistir la sucursal seleccionada
                 const savedId = localStorage.getItem('selectedBranchId')
                 const exists = finalBranches.find(b => b.id.toString() === savedId)
+                
                 if (exists) {
                     setSelectedBranchId(exists.id)
                 } else {
-                    setSelectedBranchId(finalBranches[0].id)
+                    setSelectedBranchId(defaultId)
                 }
             }
         } catch (error) {

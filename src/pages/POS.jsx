@@ -15,8 +15,8 @@ export default function POS() {
     const [paymentMethod, setPaymentMethod] = useState('Efectivo')
     const [lastSale, setLastSale] = useState(null)
     const [showTicket, setShowTicket] = useState(false)
-    const [brands, setBrands] = useState([{ id: 'all', name: 'Todos' }])
-    const [selectedBrandId, setSelectedBrandId] = useState('all')
+    const [brands, setBrands] = useState([])
+    const [selectedBrandId, setSelectedBrandId] = useState(null)
     const [taxSettings, setTaxSettings] = useState({ enable_tax: true, tax_rate: 13, tax_name: 'IVA' })
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [gridRefreshKey, setGridRefreshKey] = useState(0)
@@ -63,7 +63,7 @@ export default function POS() {
 
     async function fetchBrands() {
         if (!selectedBranchId || selectedBranchId === 'all') {
-            setBrands([{ id: 'all', name: 'Todos' }])
+            setBrands([])
             return
         }
 
@@ -90,12 +90,12 @@ export default function POS() {
             // Actually, the join might return duplicates in some configurations.
             const uniqueBrands = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
             
-            setBrands([{ id: 'all', name: 'Todos' }, ...uniqueBrands])
+            setBrands(uniqueBrands)
         } catch (err) {
             console.error('Error fetching brands for POS:', err)
             // Fallback to all brands if error
             const { data } = await supabase.from('brands').select('*').order('name')
-            if (data) setBrands([{ id: 'all', name: 'Todos' }, ...data])
+            if (data) setBrands(data)
         }
     }
 
@@ -286,20 +286,14 @@ export default function POS() {
                     >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                             <Tag size={18} style={{ opacity: 0.3 }} />
-                            <span>{selectedBrandId === 'all' ? 'Todas las marcas' : brands.find(b => b.id === selectedBrandId)?.name || 'Seleccione marca...'}</span>
+                            <span>{!selectedBrandId ? 'Seleccionar Marca' : brands.find(b => b.id === selectedBrandId)?.name || 'Seleccione marca...'}</span>
                         </div>
                         <ChevronRight size={18} style={{ transform: isBrandListOpen ? 'rotate(90deg)' : 'none', transition: '0.2s', opacity: 0.3 }} />
                     </button>
 
                     {isBrandListOpen && (
                         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '0.5rem', backgroundColor: 'white', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', border: '1px solid hsl(var(--border) / 0.6)', maxHeight: '300px', overflowY: 'auto', zIndex: 150, padding: '0.5rem' }}>
-                            <div 
-                                onClick={() => { setSelectedBrandId('all'); setIsBrandListOpen(false); }}
-                                style={{ padding: '0.8rem 1rem', borderRadius: '10px', cursor: 'pointer', fontWeight: '800', fontSize: '0.9rem', color: selectedBrandId === 'all' ? 'hsl(var(--primary))' : 'inherit', backgroundColor: selectedBrandId === 'all' ? 'hsl(var(--primary) / 0.05)' : 'transparent' }}
-                            >
-                                TODAS LAS MARCAS
-                            </div>
-                            {brands.filter(b => b.id !== 'all').map(b => (
+                            {brands.map(b => (
                                 <div 
                                     key={b.id}
                                     onClick={() => { setSelectedBrandId(b.id); setIsBrandListOpen(false); }}
