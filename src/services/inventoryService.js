@@ -129,5 +129,21 @@ export const inventoryService = {
             .order('name')
         if (error) throw error
         return data
+    },
+
+    // PRODUCTS BY MODEL
+    async getProductsByModel(modelId) {
+        const { data, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                brand:brands(name),
+                model:models(name),
+                settings:product_branch_settings(*)
+            `)
+            .eq('model_id', modelId)
+            .order('name')
+        if (error) throw error
+        return data
     }
 }

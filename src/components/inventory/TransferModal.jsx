@@ -6,6 +6,8 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
     const [branches, setBranches] = useState([])
     const [products, setProducts] = useState([])
     const [brands, setBrands] = useState([])
+    const [models, setModels] = useState([])
+    const [selectedModelId, setSelectedModelId] = useState('')
     const [selectedBrand, setSelectedBrand] = useState(null)
     const [branchStock, setBranchStock] = useState({})
     const [originBranch, setOriginBranch] = useState(initialData?.origin_branch_id || '')
@@ -33,13 +35,14 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
 
             const assignedIds = assignments?.map(a => a.branch_id) || []
 
-            const [branchesRes, productsRes, brandsRes] = await Promise.all([
+            const [branchesRes, productsRes, brandsRes, modelsRes] = await Promise.all([
                 supabase.from('branches').select('*').eq('active', true).order('name'),
                 supabase.from('products').select(`
                     *,
                     brand:brands(name)
                 `).eq('active', true).order('name'),
-                supabase.from('brands').select('*').order('name')
+                supabase.from('brands').select('*').order('name'),
+                supabase.from('models').select('*').order('name')
             ])
 
             let availableBranches = branchesRes.data || []
@@ -51,6 +54,7 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
             const allProducts = productsRes.data || []
             setProducts(allProducts)
             setBrands(brandsRes.data || [])
+            setModels(modelsRes.data || [])
 
             // Enrich initial items with product details
             if (initialData?.items) {
@@ -118,12 +122,13 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
         if (!selectedBrand && !searchTerm) return []
         return products.filter(p => {
             const matchesBrand = selectedBrand ? p.brand_id === selectedBrand.id : true
+            const matchesModel = selectedModelId ? p.model_id === selectedModelId : true
             const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+                                 p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
             const isAlreadyAdded = items.some(item => item.product_id === p.id)
-            return matchesBrand && matchesSearch && !isAlreadyAdded
+            return matchesBrand && matchesModel && matchesSearch && !isAlreadyAdded
         })
-    }, [products, selectedBrand, searchTerm, items])
+    }, [products, selectedBrand, selectedModelId, searchTerm, items])
 
     const addItem = (product) => {
         const qty = parseInt(quantities[product.id]) || 1
@@ -336,6 +341,56 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                                 />
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Level 2: Models Bar (Lineas de Producto) */}
+                {!readOnly && selectedBrand && (
+                    <div style={{ 
+                        padding: '0.5rem 2rem 1rem', 
+                        display: 'flex', 
+                        gap: '0.75rem', 
+                        overflowX: 'auto', 
+                        msOverflowStyle: 'none', 
+                        scrollbarWidth: 'none',
+                        borderBottom: '1px solid hsl(var(--border) / 0.3)',
+                        backgroundColor: 'white'
+                    }}>
+                        <button 
+                            onClick={() => setSelectedModelId('')}
+                            style={{
+                                padding: '0.4rem 1.25rem',
+                                borderRadius: '100px',
+                                backgroundColor: !selectedModelId ? 'hsl(var(--primary) / 0.8)' : 'hsl(var(--secondary) / 0.4)',
+                                color: !selectedModelId ? 'white' : 'inherit',
+                                border: 'none',
+                                fontSize: '0.8rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            Todos los productos
+                        </button>
+                        {models.filter(m => m.brand_id === selectedBrand.id).map(m => (
+                            <button 
+                                key={m.id}
+                                onClick={() => setSelectedModelId(m.id)}
+                                style={{
+                                    padding: '0.4rem 1.25rem',
+                                    borderRadius: '100px',
+                                    backgroundColor: selectedModelId === m.id ? 'hsl(var(--primary) / 0.8)' : 'hsl(var(--secondary) / 0.2)',
+                                    color: selectedModelId === m.id ? 'white' : 'inherit',
+                                    border: 'none',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                {m.name}
+                            </button>
+                        ))}
                     </div>
                 )}
 

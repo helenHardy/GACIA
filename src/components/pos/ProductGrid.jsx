@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { RefreshCw, Package, Tag, Plus, Building2, Minus } from 'lucide-react'
 
-export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart, currencySymbol = 'Bs.', refreshKey, viewMode = 'grid', stockFilter = 'all', excludeIds = [] }) {
+export default function ProductGrid({ searchTerm, branchId, brandId, modelId, onAddToCart, currencySymbol = 'Bs.', refreshKey, viewMode = 'grid', stockFilter = 'all', excludeIds = [] }) {
     const [products, setProducts] = useState([])
     const [rowQuantities, setRowQuantities] = useState({})
     const [loading, setLoading] = useState(true)
@@ -11,11 +11,11 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
 
     useEffect(() => {
         fetchProducts()
-    }, [branchId, brandId, refreshKey])
+    }, [branchId, brandId, modelId, refreshKey])
 
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchTerm, brandId])
+    }, [searchTerm, brandId, modelId])
 
     async function fetchProducts() {
         if (!branchId || branchId === 'all' || !brandId) {
@@ -57,6 +57,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
         const matchesSearch = (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
             (p.sku?.toLowerCase() || '').includes(searchTerm.toLowerCase())
         const matchesBrand = !brandId || brandId === 'all' || String(p.brand_id) === String(brandId)
+        const matchesModel = !modelId || String(p.model_id) === String(modelId)
         
         let matchesStock = true
         if (stockFilter === 'in-stock') matchesStock = (p.stock > 0)
@@ -64,7 +65,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, onAddToCart
 
         const isExcluded = excludeIds.some(id => String(id) === String(p.id))
         
-        return matchesSearch && matchesBrand && matchesStock && !isExcluded
+        return matchesSearch && matchesBrand && matchesModel && matchesStock && !isExcluded
     })
 
     const totalPages = Math.ceil(filteredProducts.length / pageSize)

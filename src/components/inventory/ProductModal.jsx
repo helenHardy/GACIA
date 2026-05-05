@@ -289,9 +289,9 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                         </div>
                         <div>
                             <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>
-                                {product ? 'Editar Producto' : 'Nuevo Producto'}
+                                {product?.id ? 'Editar Modelo' : 'Nuevo Modelo'}
                             </h2>
-                            <p style={{ fontSize: '0.8rem', opacity: 0.6, margin: 0 }}>Gestione los detalles, stock y precios del inventario</p>
+                            <p style={{ fontSize: '0.8rem', opacity: 0.6, margin: 0 }}>Gestione los detalles, stock y precios del modelo específico</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }} disabled={isSaving}>
@@ -371,7 +371,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                     <h3 style={sectionTitleStyle}><Info size={18} /> Información General</h3>
 
                                     <div style={inputWrapperStyle}>
-                                        <label style={labelStyle}>Nombre del Producto</label>
+                                        <label style={labelStyle}>Nombre del Modelo</label>
                                         <input
                                             name="name"
                                             value={formData.name}
@@ -503,7 +503,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                                     ) : (
                                         <>
                                             <Save size={18} />
-                                            {product ? 'Guardar Cambios' : 'Crear Producto'}
+                                            {product?.id ? 'Guardar Cambios' : 'Crear Modelo'}
                                         </>
                                     )}
                                 </button>

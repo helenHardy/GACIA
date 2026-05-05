@@ -17,17 +17,20 @@ export default function POS() {
     const [showTicket, setShowTicket] = useState(false)
     const [brands, setBrands] = useState([])
     const [selectedBrandId, setSelectedBrandId] = useState(null)
+    const [selectedModelId, setSelectedModelId] = useState(null)
     const [taxSettings, setTaxSettings] = useState({ enable_tax: true, tax_rate: 13, tax_name: 'IVA' })
     const [currencySymbol, setCurrencySymbol] = useState('Bs.')
     const [gridRefreshKey, setGridRefreshKey] = useState(0)
     const [viewMode, setViewMode] = useState('list') // 'grid' or 'list'
     const [stockFilter, setStockFilter] = useState('in-stock') 
+    const [models, setModels] = useState([])
     const [isBrandListOpen, setIsBrandListOpen] = useState(false)
     const { selectedBranchId, branches } = useBranch()
     const ticketRef = useRef()
 
     useEffect(() => {
         fetchSettings()
+        fetchModels()
     }, [])
 
     useEffect(() => {
@@ -61,6 +64,11 @@ export default function POS() {
         setCurrencySymbol(symbol)
     }
 
+    async function fetchModels() {
+        const { data } = await supabase.from('models').select('*').order('name')
+        if (data) setModels(data)
+    }
+
     async function fetchBrands() {
         if (!selectedBranchId || selectedBranchId === 'all') {
             setBrands([])
@@ -85,15 +93,10 @@ export default function POS() {
 
             if (error) throw error
             
-            // Supabase returns the same brand multiple times if we don't handle it, 
-            // but with !inner and standard select it should be fine if we map it.
-            // Actually, the join might return duplicates in some configurations.
             const uniqueBrands = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
-            
             setBrands(uniqueBrands)
         } catch (err) {
             console.error('Error fetching brands for POS:', err)
-            // Fallback to all brands if error
             const { data } = await supabase.from('brands').select('*').order('name')
             if (data) setBrands(data)
         }
@@ -324,6 +327,57 @@ export default function POS() {
                     </div>
                 </div>
             </div>
+
+            {/* Level 2: Product Lines (Models) Selector Bar */}
+            {selectedBrandId && (
+                <div style={{ 
+                    display: 'flex', 
+                    gap: '0.75rem', 
+                    overflowX: 'auto', 
+                    padding: '0.5rem 0', 
+                    marginBottom: '0.5rem',
+                    msOverflowStyle: 'none', 
+                    scrollbarWidth: 'none',
+                    animation: 'fadeInDown 0.3s ease-out'
+                }}>
+                    <button 
+                        onClick={() => setSelectedModelId(null)}
+                        style={{
+                            padding: '0.4rem 1.25rem',
+                            borderRadius: '100px',
+                            backgroundColor: !selectedModelId ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                            color: !selectedModelId ? 'white' : 'inherit',
+                            border: 'none',
+                            fontSize: '0.8rem',
+                            fontWeight: '800',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        Todos
+                    </button>
+                    {models.filter(m => m.brand_id === selectedBrandId).map(m => (
+                        <button 
+                            key={m.id}
+                            onClick={() => setSelectedModelId(m.id)}
+                            style={{
+                                padding: '0.4rem 1.25rem',
+                                borderRadius: '100px',
+                                backgroundColor: selectedModelId === m.id ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.2)',
+                                color: selectedModelId === m.id ? 'white' : 'inherit',
+                                border: 'none',
+                                fontSize: '0.8rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            {m.name}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Catalog Results Area */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', alignItems: 'center' }}>
@@ -383,6 +437,7 @@ export default function POS() {
                         searchTerm={searchTerm}
                         branchId={selectedBranchId}
                         brandId={selectedBrandId}
+                        modelId={selectedModelId}
                         onAddToCart={addToCart}
                         currencySymbol={currencySymbol}
                         refreshKey={gridRefreshKey}

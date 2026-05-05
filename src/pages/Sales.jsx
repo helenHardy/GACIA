@@ -348,6 +348,78 @@ export default function Sales() {
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
     }).reduce((acc, s) => acc + (s.total || 0), 0)
 
+    const exportToExcel = () => {
+        const data = filteredSales.map(s => ({
+            'Orden': `#${s.sale_number || s.id}`,
+            'Cliente': s.customers?.name || 'Cliente General',
+            'Sucursal': s.branches?.name,
+            'Vendedor': s.profiles?.full_name || 'N/A',
+            'Fecha': new Date(s.created_at).toLocaleDateString(),
+            'Hora': new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            'Total': s.total
+        }));
+        const ws = utils.json_to_sheet(data);
+        const wb = utils.book_new();
+        utils.book_append_sheet(wb, ws, "Ventas");
+        writeFile(wb, `Reporte_Ventas_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    const printReport = () => {
+        const printWindow = window.open('', '_blank');
+        const content = `
+            <html>
+            <head>
+                <title>Reporte de Ventas</title>
+                <style>
+                    body { font-family: sans-serif; padding: 40px; color: #1a1a1a; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 25px; }
+                    th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; font-size: 13px; }
+                    th { background-color: #f9fafb; font-weight: bold; color: #374151; }
+                    .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+                    .footer { margin-top: 40px; text-align: right; font-weight: 900; font-size: 18px; color: #3b82f6; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1 style="margin: 0; font-size: 28px;">REPORTE GENERAL DE VENTAS</h1>
+                    <p style="margin: 5px 0; opacity: 0.6;">Generado el: ${new Date().toLocaleString()}</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ORDEN</th>
+                            <th>CLIENTE</th>
+                            <th>SUCURSAL</th>
+                            <th>VENDEDOR</th>
+                            <th>FECHA Y HORA</th>
+                            <th style="text-align: right;">TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filteredSales.map(s => `
+                            <tr>
+                                <td style="font-weight: bold;">#${s.sale_number || s.id}</td>
+                                <td>${s.customers?.name || 'Cliente General'}</td>
+                                <td>${s.branches?.name}</td>
+                                <td>${s.profiles?.full_name || 'N/A'}</td>
+                                <td>${new Date(s.created_at).toLocaleString()}</td>
+                                <td style="text-align: right; font-weight: bold;">Bs.${s.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>TOTAL GENERAL: Bs.${filteredSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p style="font-size: 12px; font-weight: normal; color: #6b7280; margin-top: 5px;">Transacciones reportadas: ${filteredSales.length}</p>
+                </div>
+                <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }</script>
+            </body>
+            </html>
+        `;
+        printWindow.document.write(content);
+        printWindow.document.close();
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '2rem' }}>
             {isModalOpen && (
@@ -426,11 +498,9 @@ export default function Sales() {
             </div>
 
             {/* Metrics Dashboard */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
                 {[
-                    { label: 'Total Filtrado', val: `${currencySymbol}${filteredSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, icon: <TrendingUp size={24} />, bg: 'linear-gradient(135deg, hsl(142 76% 36%), hsl(142 70% 45%))', trend: `Sumatoria actual` },
-                    { label: 'Ventas Hoy (Gral)', val: `${currencySymbol}${sales.filter(s => new Date(s.created_at).toLocaleDateString('sv-SE') === today).reduce((acc, s) => acc + (s.total || 0), 0).toFixed(0)}`, icon: <Target size={24} />, bg: 'linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8))', trend: 'Total global' },
-                    { label: 'Ticket Promedio', val: `${currencySymbol}${filteredSales.length > 0 ? (filteredSales.reduce((acc, s) => acc + (s.total || 0), 0) / filteredSales.length).toFixed(0) : 0}`, icon: <DollarSign size={24} />, bg: 'linear-gradient(135deg, #6366f1, #818cf8)', trend: 'De lo filtrado' },
+                    { label: 'Total Filtrado', val: `${currencySymbol}${filteredSales.reduce((acc, s) => acc + (s.total || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: <TrendingUp size={24} />, bg: 'linear-gradient(135deg, hsl(142 76% 36%), hsl(142 70% 45%))', trend: `Sumatoria actual` },
                     { label: 'Transacciones', val: filteredSales.length, icon: <ClipboardList size={24} />, bg: 'linear-gradient(135deg, #f59e0b, #fbbf24)', trend: 'Resultados encontrados' }
                 ].map((m, i) => (
 
@@ -547,6 +617,8 @@ export default function Sales() {
                     )}
                 </div>
 
+                <button onClick={exportToExcel} className="btn" style={{ padding: '0.75rem 1.25rem', borderRadius: '12px', backgroundColor: 'hsl(142 76% 36% / 0.1)', color: 'hsl(142 76% 36%)', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Download size={18} /> Exportar Excel</button>
+                <button onClick={printReport} className="btn" style={{ padding: '0.75rem 1.25rem', borderRadius: '12px', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Printer size={18} /> Imprimir Reporte</button>
                 <button
                     onClick={() => {
                         if (selectedBranchId) setFilterBranchId(selectedBranchId)
@@ -627,57 +699,8 @@ export default function Sales() {
                                     </td>
                                     <td style={{ padding: '1.25rem', textAlign: 'right' }}>
                                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>
-                                            {/* Admin: Unlock controls */}
-                                            {isAdmin && (
-                                                <div style={{ display: 'flex', gap: '0.25rem', marginRight: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '4px', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.3)' }}>
-                                                    <button
-                                                        onClick={() => togglePermission(s.id, 'can_edit', s.can_edit)}
-                                                        className="btn-icon"
-                                                        title={s.can_edit ? "Bloquear Edición" : "Habilitar Edición"}
-                                                        style={{
-                                                            padding: '6px',
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            backgroundColor: s.can_edit ? 'hsl(var(--primary) / 0.15)' : 'transparent',
-                                                            color: s.can_edit ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                    >
-                                                        <Edit2 size={14} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => togglePermission(s.id, 'can_void', s.can_void)}
-                                                        className="btn-icon"
-                                                        title={s.can_void ? "Bloquear Anulación" : "Habilitar Anulación"}
-                                                        style={{
-                                                            padding: '6px',
-                                                            borderRadius: '8px',
-                                                            border: 'none',
-                                                            backgroundColor: s.can_void ? 'hsl(var(--destructive) / 0.15)' : 'transparent',
-                                                            color: s.can_void ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.3)',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            )}
-
                                             <button onClick={() => handlePrint(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--foreground))' }} title="Imprimir Ticket"><Printer size={18} /></button>
-
-                                            {(isAdmin || s.can_edit) ? (
-                                                <button onClick={() => handleEdit(s, false)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Modificar"><Edit2 size={18} /></button>
-                                            ) : (
-                                                <button onClick={() => handleEdit(s, true)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.2)', color: 'hsl(var(--foreground) / 0.3)' }} title="Ver Detalles"><Eye size={18} /></button>
-                                            )}
+                                            <button onClick={() => handleEdit(s, true)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Ver Detalles"><Eye size={18} /></button>
 
                                             {(isAdmin || s.can_void) && (
                                                 <button onClick={() => handleVoid(s)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }} title="Anular"><Trash2 size={18} /></button>

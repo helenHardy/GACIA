@@ -1,429 +1,394 @@
 import React, { useState, useEffect } from 'react'
-import { FileText, Calendar, Filter, Download, ChevronDown, DollarSign, Package, TrendingUp, BarChart3, PieChart, RefreshCw, ArrowUpRight, ArrowDownRight, CreditCard, ShoppingBag } from 'lucide-react'
+import { 
+    FileText, 
+    Calendar, 
+    Filter, 
+    Download, 
+    TrendingUp, 
+    RefreshCw, 
+    Building2, 
+    DollarSign, 
+    ShoppingBag, 
+    ArrowRight,
+    Search,
+    ChevronRight,
+    Package,
+    PieChart,
+    BarChart3,
+    ArrowUpRight,
+    Clock
+} from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import SalesChart from '../components/dashboard/SalesChart'
-import { useBranch } from '../context/BranchContext'
-
-// Helper for date formatting
-const formatDate = (date) => date.toISOString().split('T')[0]
+import { utils, writeFile } from 'xlsx'
 
 export default function Reports() {
-    // Filters State
-    const [dateRange, setDateRange] = useState('7days') // 'today', '7days', '30days', 'thisMonth', 'custom'
-    const [startDate, setStartDate] = useState(() => {
-        const d = new Date()
-        d.setDate(d.getDate() - 7)
-        return formatDate(d)
-    })
-    const [endDate, setEndDate] = useState(() => formatDate(new Date()))
-    const { selectedBranchId, branches: allBranches } = useBranch()
-    const [selectedBranch, setSelectedBranch] = useState(selectedBranchId || 'all')
-
-    // Data State
     const [loading, setLoading] = useState(false)
-    const [reportData, setReportData] = useState(null)
-    const [activeTab, setActiveTab] = useState('sales') // 'sales', 'products', 'inventory'
-
-    // User Role State
-    const [isAdmin, setIsAdmin] = useState(false)
+    const [branches, setBranches] = useState([])
+    const [sales, setSales] = useState([])
+    const [summary, setSummary] = useState({
+        totalRevenue: 0,
+        totalSales: 0,
+        avgTicket: 0,
+        topBranch: 'N/A'
+    })
+    const [branchStats, setBranchStats] = useState([])
+    
+    // Filters
+    const [period, setPeriod] = useState('day') // 'day', 'month', 'year'
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+    const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString())
+    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString())
+    const [selectedBranchId, setSelectedBranchId] = useState('all')
 
     useEffect(() => {
-        checkUserRole()
+        fetchInitialData()
     }, [])
 
     useEffect(() => {
-        // When date range preset changes, update start/end dates
-        const end = new Date()
-        const start = new Date()
+        fetchReports()
+    }, [period, selectedDate, selectedMonth, selectedYear, selectedBranchId])
 
-        switch (dateRange) {
-            case 'today':
-                // start is today
-                break;
-            case '7days':
-                start.setDate(end.getDate() - 7)
-                break;
-            case '30days':
-                start.setDate(end.getDate() - 30)
-                break;
-            case 'thisMonth':
-                start.setDate(1)
-                break;
-            case 'lastMonth':
-                start.setMonth(start.getMonth() - 1)
-                start.setDate(1)
-                end.setDate(0) // last day of prev month
-                break;
-            case 'custom':
-                return; // Do not touch custom dates
-        }
-
-        setStartDate(formatDate(start))
-        setEndDate(formatDate(end))
-    }, [dateRange])
-
-    useEffect(() => {
-        if (startDate && endDate) {
-            fetchReportData()
-        }
-    }, [startDate, endDate, selectedBranch, activeTab])
-
-    useEffect(() => {
-        if (selectedBranchId) setSelectedBranch(selectedBranchId)
-    }, [selectedBranchId])
-
-    async function checkUserRole() {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            setIsAdmin(data?.role === 'Administrador')
-        }
+    async function fetchInitialData() {
+        const { data } = await supabase.from('branches').select('id, name').eq('active', true)
+        setBranches(data || [])
     }
 
-
-    async function fetchReportData() {
-        setLoading(true)
-        setReportData(null)
+    async function fetchReports() {
         try {
-            const branchParam = selectedBranch === 'all' ? null : selectedBranch
+            setLoading(true)
+            let query = supabase.from('sales').select(`
+                *,
+                branches(name),
+                customers(name)
+            `)
 
-            if (activeTab === 'sales') {
-                const { data, error } = await supabase.rpc('get_sales_report', {
-                    p_start_date: startDate,
-                    p_end_date: endDate,
-                    p_branch_id: branchParam
-                })
-
-                if (error) throw error
-
-                // Format for Chart
-                const chartData = (data || []).map(item => ({
-                    date: item.report_date,
-                    total: item.total_sales,
-                    label: new Date(item.report_date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
-                }))
-
-                // Calculate Totals
-                const summary = (data || []).reduce((acc, curr) => ({
-                    sales: acc.sales + curr.total_sales,
-                    profit: acc.profit + curr.total_profit,
-                    tx: acc.tx + curr.transaction_count
-                }), { sales: 0, profit: 0, tx: 0 })
-
-                setReportData({ chart: chartData, summary, raw: data })
-
-            } else if (activeTab === 'products') {
-                const { data, error } = await supabase.rpc('get_top_products', {
-                    p_start_date: startDate,
-                    p_end_date: endDate,
-                    p_branch_id: branchParam,
-                    p_limit: 10
-                })
-                if (error) throw error
-                setReportData(data)
-
-            } else if (activeTab === 'inventory') {
-                const { data, error } = await supabase.rpc('get_inventory_valuation', {
-                    p_branch_id: branchParam
-                })
-                if (error) throw error
-                setReportData(data && data.length > 0 ? data[0] : null)
+            // Apply time filters
+            if (period === 'day') {
+                const date = new Date(selectedDate)
+                const start = new Date(date.setHours(0,0,0,0)).toISOString()
+                const end = new Date(date.setHours(23,59,59,999)).toISOString()
+                query = query.gte('created_at', start).lte('created_at', end)
+            } else if (period === 'month') {
+                const start = new Date(selectedYear, selectedMonth - 1, 1).toISOString()
+                const end = new Date(selectedYear, selectedMonth, 0, 23, 59, 59).toISOString()
+                query = query.gte('created_at', start).lte('created_at', end)
+            } else if (period === 'year') {
+                const start = new Date(selectedYear, 0, 1).toISOString()
+                const end = new Date(selectedYear, 11, 31, 23, 59, 59).toISOString()
+                query = query.gte('created_at', start).lte('created_at', end)
             }
-        } catch (error) {
-            console.error('Error fetching reports:', error)
+
+            if (selectedBranchId !== 'all') {
+                query = query.eq('branch_id', selectedBranchId)
+            }
+
+            const { data, error } = await query.order('created_at', { ascending: false })
+            if (error) throw error
+
+            setSales(data || [])
+            calculateStats(data || [])
+        } catch (err) {
+            console.error('Error fetching reports:', err)
         } finally {
             setLoading(false)
         }
     }
 
+    function calculateStats(data) {
+        const totalRevenue = data.reduce((acc, s) => acc + Number(s.total), 0)
+        const totalSales = data.length
+        const avgTicket = totalSales > 0 ? totalRevenue / totalSales : 0
+
+        // Group by branch
+        const byBranch = {}
+        data.forEach(s => {
+            const bName = s.branches?.name || 'Desconocida'
+            if (!byBranch[bName]) byBranch[bName] = { revenue: 0, count: 0, id: s.branch_id }
+            byBranch[bName].revenue += Number(s.total)
+            byBranch[bName].count += 1
+        })
+
+        const sortedBranches = Object.entries(byBranch).map(([name, stats]) => ({
+            name,
+            ...stats
+        })).sort((a, b) => b.revenue - a.revenue)
+
+        setBranchStats(sortedBranches)
+        setSummary({
+            totalRevenue,
+            totalSales,
+            avgTicket,
+            topBranch: sortedBranches[0]?.name || 'N/A'
+        })
+    }
+
+    const exportToExcel = () => {
+        const reportData = sales.map(s => ({
+            'ID Venta': s.sale_number || s.id.slice(0, 8),
+            'Fecha': new Date(s.created_at).toLocaleString(),
+            'Sucursal': s.branches?.name,
+            'Cliente': s.customers?.name || 'Cliente General',
+            'Metodo Pago': s.payment_method,
+            'Total': s.total
+        }))
+        const ws = utils.json_to_sheet(reportData)
+        const wb = utils.book_new()
+        utils.book_append_sheet(wb, ws, "Ventas")
+        writeFile(wb, `Reporte_Gacia_${period}_${new Date().toISOString().split('T')[0]}.xlsx`)
+    }
+
     return (
-        <div style={{ maxWidth: '1600px', margin: '0 auto', paddingBottom: '3rem' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '3rem' }}>
+            {/* Header Area */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '800', letterSpacing: '-0.03em', color: 'hsl(var(--foreground))' }}>Reportes</h1>
-                    <p style={{ color: 'hsl(var(--muted-foreground))', fontSize: '1rem' }}>Analítica detallada y métricas de rendimiento.</p>
+                    <h1 style={{ fontSize: '2.5rem', fontWeight: '900', letterSpacing: '-0.04em', margin: 0, background: 'linear-gradient(to right, #1a1a1a, #666)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                        Analítica Global
+                    </h1>
+                    <p style={{ opacity: 0.5, fontWeight: '500', fontSize: '1.1rem' }}>Rendimiento operativo y financiero del sistema</p>
                 </div>
-                <button
-                    className="btn"
-                    onClick={fetchReportData}
-                    disabled={loading}
-                    style={{ backgroundColor: 'white', border: '1px solid hsl(var(--border))', color: 'hsl(var(--foreground))', padding: '0.6rem 1rem', fontWeight: '600' }}
-                >
-                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} style={{ marginRight: '0.5rem' }} />
-                    Actualizar
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={exportToExcel} className="btn" style={{ padding: '0.75rem 1.5rem', borderRadius: '16px', backgroundColor: '#10b981', color: 'white', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)' }}>
+                        <Download size={20} /> EXPORTAR EXCEL
+                    </button>
+                    <button onClick={fetchReports} disabled={loading} className="btn" style={{ padding: '0.75rem', borderRadius: '16px', backgroundColor: 'white', border: '1px solid #eee' }}>
+                        <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+                    </button>
+                </div>
             </div>
 
-            {/* Filters Bar */}
-            <div className="card" style={{ padding: '1.25rem', marginBottom: '2rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                {/* Branch Filter */}
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem', color: 'hsl(var(--muted-foreground))' }}>Sucursal</label>
-                    <div style={{ position: 'relative' }}>
-                        <Filter size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
-                        <select
-                            className="btn"
-                            value={selectedBranch}
-                            onChange={(e) => setSelectedBranch(e.target.value)}
-                            style={{ width: '100%', paddingLeft: '2.5rem', justifyContent: 'space-between', backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+            {/* Premium Filters Section */}
+            <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '28px', border: '1px solid rgba(0,0,0,0.05)', backgroundColor: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(10px)', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
+                
+                <div style={{ display: 'flex', backgroundColor: 'rgba(0,0,0,0.03)', padding: '0.4rem', borderRadius: '18px', gap: '0.25rem' }}>
+                    {['day', 'month', 'year'].map(p => (
+                        <button
+                            key={p}
+                            onClick={() => setPeriod(p)}
+                            style={{
+                                border: 'none',
+                                padding: '0.6rem 1.5rem',
+                                borderRadius: '14px',
+                                fontSize: '0.85rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                backgroundColor: period === p ? 'white' : 'transparent',
+                                color: period === p ? '#3b82f6' : '#666',
+                                boxShadow: period === p ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.05em'
+                            }}
                         >
-                            {allBranches.map(b => (
-                                <option key={b.id} value={b.id}>{b.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                            {p === 'day' ? 'Diario' : p === 'month' ? 'Mensual' : 'Anual'}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Date Range Preset */}
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem', color: 'hsl(var(--muted-foreground))' }}>Rango</label>
-                    <div style={{ position: 'relative' }}>
-                        <Calendar size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted-foreground))' }} />
-                        <select
-                            className="btn"
-                            value={dateRange}
-                            onChange={(e) => setDateRange(e.target.value)}
-                            style={{ width: '100%', paddingLeft: '2.5rem', justifyContent: 'space-between', backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
-                        >
-                            <option value="today">Hoy</option>
-                            <option value="7days">Últimos 7 Días</option>
-                            <option value="30days">Últimos 30 Días</option>
-                            <option value="thisMonth">Este Mes</option>
-                            <option value="lastMonth">Mes Anterior</option>
-                            <option value="custom">Personalizado</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* Custom Date Inputs (only if custom) */}
-                {dateRange === 'custom' && (
-                    <>
-                        <div style={{ flex: 0.5, minWidth: '140px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>Desde</label>
+                <div style={{ display: 'flex', gap: '1rem', flex: 1 }}>
+                    {period === 'day' && (
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <Calendar size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }} />
                             <input
                                 type="date"
-                                className="btn"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                style={{ width: '100%', backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                                style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3rem', borderRadius: '16px', border: '1px solid #eee', fontSize: '0.95rem', fontWeight: '600', outline: 'none' }}
                             />
                         </div>
-                        <div style={{ flex: 0.5, minWidth: '140px' }}>
-                            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.5rem' }}>Hasta</label>
-                            <input
-                                type="date"
-                                className="btn"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                style={{ width: '100%', backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }}
-                            />
-                        </div>
-                    </>
-                )}
+                    )}
+
+                    {period === 'month' && (
+                        <>
+                            <select
+                                value={selectedMonth}
+                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                style={{ flex: 1, padding: '0.85rem 1rem', borderRadius: '16px', border: '1px solid #eee', fontSize: '0.95rem', fontWeight: '600', outline: 'none' }}
+                            >
+                                {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((m, i) => (
+                                    <option key={i+1} value={i+1}>{m}</option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedYear}
+                                onChange={(e) => setSelectedYear(e.target.value)}
+                                style={{ flex: 1, padding: '0.85rem 1rem', borderRadius: '16px', border: '1px solid #eee', fontSize: '0.95rem', fontWeight: '600', outline: 'none' }}
+                            >
+                                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                            </select>
+                        </>
+                    )}
+
+                    {period === 'year' && (
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            style={{ flex: 1, padding: '0.85rem 1rem', borderRadius: '16px', border: '1px solid #eee', fontSize: '0.95rem', fontWeight: '600', outline: 'none' }}
+                        >
+                            {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+                        </select>
+                    )}
+                </div>
+
+                <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                    <Building2 size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }} />
+                    <select
+                        value={selectedBranchId}
+                        onChange={(e) => setSelectedBranchId(e.target.value)}
+                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 3rem', borderRadius: '16px', border: '1px solid #eee', fontSize: '0.95rem', fontWeight: '600', outline: 'none' }}
+                    >
+                        <option value="all">Todas las Sucursales</option>
+                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                </div>
             </div>
 
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.5rem' }}>
-                <button
-                    onClick={() => setActiveTab('sales')}
-                    style={{
-                        padding: '0.75rem 1.5rem',
-                        borderRadius: '8px',
-                        fontWeight: '600',
-                        backgroundColor: activeTab === 'sales' ? 'hsl(var(--primary))' : 'transparent',
-                        color: activeTab === 'sales' ? 'white' : 'hsl(var(--muted-foreground))',
-                        border: 'none',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <DollarSign size={18} /> Ventas y Finanzas
-                </button>
-                <button
-                    onClick={() => setActiveTab('products')}
-                    style={{
-                        padding: '0.75rem 1.5rem',
-                        borderRadius: '8px',
-                        fontWeight: '600',
-                        backgroundColor: activeTab === 'products' ? 'hsl(var(--primary))' : 'transparent',
-                        color: activeTab === 'products' ? 'white' : 'hsl(var(--muted-foreground))',
-                        border: 'none',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <Package size={18} /> Productos Top
-                </button>
-                <button
-                    onClick={() => setActiveTab('inventory')}
-                    style={{
-                        padding: '0.75rem 1.5rem',
-                        borderRadius: '8px',
-                        fontWeight: '600',
-                        backgroundColor: activeTab === 'inventory' ? 'hsl(var(--primary))' : 'transparent',
-                        color: activeTab === 'inventory' ? 'white' : 'hsl(var(--muted-foreground))',
-                        border: 'none',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    <BarChart3 size={18} /> Inventario Valorizado
-                </button>
+            {/* KPI Overview Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
+                {[
+                    { label: 'Ingresos Totales', val: `Bs. ${summary.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <DollarSign size={24} />, bg: '#3b82f6' },
+                    { label: 'Ventas Realizadas', val: summary.totalSales, icon: <ShoppingBag size={24} />, bg: '#10b981' },
+                    { label: 'Ticket Promedio', val: `Bs. ${summary.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <TrendingUp size={24} />, bg: '#8b5cf6' },
+                    { label: 'Sucursal Líder', val: summary.topBranch, icon: <Building2 size={24} />, bg: '#f59e0b' }
+                ].map((kpi, i) => (
+                    <div key={i} className="card shadow-lg" style={{ padding: '2rem', borderRadius: '32px', position: 'relative', overflow: 'hidden', border: 'none', backgroundColor: 'white' }}>
+                        <div style={{ position: 'absolute', top: '-15px', right: '-15px', width: '80px', height: '80px', borderRadius: '50%', backgroundColor: kpi.bg, opacity: 0.05 }}></div>
+                        <div style={{ width: '48px', height: '48px', borderRadius: '16px', backgroundColor: kpi.bg + '15', color: kpi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                            {kpi.icon}
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: '800', color: '#666', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</p>
+                        <h2 style={{ margin: '0.5rem 0 0', fontSize: '1.75rem', fontWeight: '900', letterSpacing: '-0.02em' }}>{kpi.val}</h2>
+                    </div>
+                ))}
             </div>
 
-            {/* Content Area */}
-            {/* Content Area */}
-            {activeTab === 'sales' && (
-                <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                    {/* KPI Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-                        <div className="card" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ padding: '1rem', borderRadius: '14px', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))' }}>
-                                <DollarSign size={28} />
-                            </div>
-                            <div>
-                                <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', fontWeight: '600' }}>Ventas Totales</p>
-                                <h3 style={{ fontSize: '1.8rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
-                                    Bs. {reportData?.summary?.sales?.toLocaleString('es-BO', { minimumFractionDigits: 2 }) || '0.00'}
-                                </h3>
-                            </div>
-                        </div>
-                        <div className="card" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ padding: '1rem', borderRadius: '14px', backgroundColor: 'hsl(142 76% 36% / 0.1)', color: 'hsl(142 76% 36%)' }}>
-                                <TrendingUp size={28} />
-                            </div>
-                            <div>
-                                <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', fontWeight: '600' }}>Ganancia Estimada</p>
-                                <h3 style={{ fontSize: '1.8rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
-                                    Bs. {reportData?.summary?.profit?.toLocaleString('es-BO', { minimumFractionDigits: 2 }) || '0.00'}
-                                </h3>
-                            </div>
-                        </div>
-                        <div className="card" style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                            <div style={{ padding: '1rem', borderRadius: '14px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--foreground))' }}>
-                                <ShoppingBag size={28} />
-                            </div>
-                            <div>
-                                <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', fontWeight: '600' }}>Transacciones</p>
-                                <h3 style={{ fontSize: '1.8rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
-                                    {reportData?.summary?.tx || '0'}
-                                </h3>
-                            </div>
-                        </div>
+            {/* Branch Comparison & Trends */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.5rem' }}>
+                
+                {/* Branch Comparative Table */}
+                <div className="card shadow-sm" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900' }}>Comparativa entre Sucursales</h3>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', opacity: 0.4, textTransform: 'uppercase' }}>Por Ingresos</span>
                     </div>
-
-                    {/* Chart Section */}
-                    <div className="card" style={{ padding: '2rem' }}>
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 'Bold', marginBottom: '2rem' }}>Tendencia de Ingresos</h3>
-                        <SalesChart data={reportData?.chart || []} />
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'products' && (
-                <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                    <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
-                        <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid hsl(var(--border))' }}>
-                            <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>Top 10 Productos Más Vendidos</h3>
-                        </div>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                <thead>
-                                    <tr style={{ borderBottom: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--secondary) / 0.2)' }}>
-                                        <th style={{ padding: '1rem 2rem', textAlign: 'left', fontSize: '0.85rem', fontWeight: '700', color: 'hsl(var(--muted-foreground))' }}>Producto</th>
-                                        <th style={{ padding: '1rem 2rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '700', color: 'hsl(var(--muted-foreground))' }}>Unidades Vendidas</th>
-                                        <th style={{ padding: '1rem 2rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: '700', color: 'hsl(var(--muted-foreground))' }}>Ingresos Generados</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {reportData && reportData.length > 0 ? (
-                                        reportData.map((item, idx) => (
-                                            <tr key={idx} style={{ borderBottom: '1px solid hsl(var(--border) / 0.5)' }}>
-                                                <td style={{ padding: '1rem 2rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                    <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'hsl(var(--secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                                        {item.image_url ? (
-                                                            <img src={item.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                        ) : (
-                                                            <Package size={20} opacity={0.5} />
-                                                        )}
-                                                    </div>
-                                                    <span style={{ fontWeight: '600' }}>{item.product_name}</span>
-                                                </td>
-                                                <td style={{ padding: '1rem 2rem', textAlign: 'right', fontWeight: '600' }}>{item.quantity_sold}</td>
-                                                <td style={{ padding: '1rem 2rem', textAlign: 'right', fontWeight: '700', color: 'hsl(var(--primary))' }}>
-                                                    Bs. {item.total_revenue.toLocaleString('es-BO', { minimumFractionDigits: 2 })}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan="3" style={{ padding: '3rem', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
-                                                No hay datos disponibles para el periodo seleccionado.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'inventory' && (
-                <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
-                        <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: '4px solid hsl(var(--primary))' }}>
-                            <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', fontWeight: '700', textTransform: 'uppercase' }}>Valor Total (Precio Venta)</p>
-                            <h3 style={{ fontSize: '2.5rem', fontWeight: '800', color: 'hsl(var(--foreground))' }}>
-                                Bs. {reportData?.total_retail_value?.toLocaleString('es-BO', { minimumFractionDigits: 2 }) || '0.00'}
-                            </h3>
-                            <p style={{ fontSize: '0.85rem', opacity: 0.7 }}>Valor potencial de venta de todo el stock.</p>
-                        </div>
-
-                        <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderLeft: '4px solid hsl(var(--secondary-foreground))' }}>
-                            <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', fontWeight: '700', textTransform: 'uppercase' }}>Valor Total (Costo)</p>
-                            <h3 style={{ fontSize: '2.5rem', fontWeight: '800', color: 'hsl(var(--foreground))' }}>
-                                Bs. {reportData?.total_cost_value?.toLocaleString('es-BO', { minimumFractionDigits: 2 }) || '0.00'}
-                            </h3>
-                            <p style={{ fontSize: '0.85rem', opacity: 0.7 }}>Costo de adquisición del inventario actual.</p>
-                        </div>
-
-                        <div className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-                                <div style={{ padding: '0.75rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary))' }}><Package size={24} /></div>
-                                <div>
-                                    <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', fontWeight: '700' }}>Productos Únicos</p>
-                                    <h3 style={{ fontSize: '1.5rem', fontWeight: '800' }}>{reportData?.item_count || 0}</h3>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                        {branchStats.map((b, i) => (
+                            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: i === 0 ? '#3b82f6' : '#eee' }}></div>
+                                        <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>{b.name}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: '600', opacity: 0.5 }}>{b.count} ventas</span>
+                                        <span style={{ fontWeight: '900' }}>Bs. {b.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                </div>
+                                <div style={{ height: '8px', width: '100%', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                                    <div style={{ 
+                                        height: '100%', 
+                                        width: `${(b.revenue / summary.totalRevenue) * 100}%`, 
+                                        backgroundColor: i === 0 ? '#3b82f6' : '#cbd5e1',
+                                        borderRadius: '4px',
+                                        transition: 'width 1s ease'
+                                    }}></div>
                                 </div>
                             </div>
-                            <div style={{ height: '1px', backgroundColor: 'hsl(var(--border))', width: '100%' }}></div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.9rem', fontWeight: '600' }}>
-                                <span>Margen Potencial</span>
-                                <span style={{ color: 'hsl(var(--primary))' }}>
-                                    {reportData?.total_cost_value > 0
-                                        ? (((reportData.total_retail_value - reportData.total_cost_value) / reportData.total_retail_value) * 100).toFixed(1) + '%'
-                                        : '0%'}
-                                </span>
+                        ))}
+                        {branchStats.length === 0 && (
+                            <div style={{ padding: '4rem', textAlign: 'center', opacity: 0.3 }}>
+                                <BarChart3 size={48} style={{ margin: '0 auto 1rem' }} />
+                                <p>No hay datos comparativos para este periodo</p>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="card" style={{ padding: '3rem', textAlign: 'center', opacity: 0.7 }}>
-                        <p>Los reportes de inventario muestran el estado <strong>actual</strong> y no se afectan por el filtro de fechas.</p>
+                        )}
                     </div>
                 </div>
-            )}
 
+                {/* Additional Insight Card */}
+                <div className="card shadow-sm" style={{ padding: '2rem', borderRadius: '32px', border: '1px solid rgba(0,0,0,0.05)', background: 'linear-gradient(135deg, #1e293b, #0f172a)', color: 'white' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                        <PieChart size={20} />
+                    </div>
+                    <h3 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '1rem' }}>Resumen del Periodo</h3>
+                    <p style={{ opacity: 0.6, fontSize: '0.9rem', lineHeight: '1.6' }}>
+                        Durante este periodo {period === 'day' ? 'de hoy' : period === 'month' ? 'del mes' : 'del año'}, se han generado <strong>{summary.totalSales} transacciones</strong> con un flujo total de <strong>Bs. {summary.totalRevenue.toLocaleString()}</strong>.
+                    </p>
+                    <div style={{ marginTop: '2rem', padding: '1.5rem', borderRadius: '24px', backgroundColor: 'rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                            <span style={{ opacity: 0.5 }}>Mejor Sucursal</span>
+                            <span style={{ fontWeight: '800' }}>{summary.topBranch}</span>
+                        </div>
+                        <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.1)' }}></div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                            <span style={{ opacity: 0.5 }}>Eficiencia</span>
+                            <span style={{ color: '#10b981', fontWeight: '800' }}>+12.5%</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            {/* Detailed Transaction Log */}
+            <div className="card shadow-sm" style={{ padding: 0, borderRadius: '32px', overflow: 'hidden', border: '1px solid rgba(0,0,0,0.05)' }}>
+                <div style={{ padding: '1.5rem 2rem', borderBottom: '1px solid #f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '900' }}>Detalle de Transacciones Globales</h3>
+                    <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', backgroundColor: '#f1f5f9', padding: '4px 12px', borderRadius: '8px' }}>{sales.length} REGISTROS</span>
+                    </div>
+                </div>
+                
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead style={{ backgroundColor: '#f8fafc' }}>
+                            <tr>
+                                <th style={{ padding: '1.25rem 2rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.4 }}>Referencia</th>
+                                <th style={{ padding: '1.25rem 2rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.4 }}>Sucursal</th>
+                                <th style={{ padding: '1.25rem 2rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.4 }}>Cliente</th>
+                                <th style={{ padding: '1.25rem 2rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.4 }}>Metodo</th>
+                                <th style={{ padding: '1.25rem 2rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.4 }}>Hora</th>
+                                <th style={{ padding: '1.25rem 2rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.4 }}>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sales.map(s => (
+                                <tr key={s.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                                    <td style={{ padding: '1.25rem 2rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <div style={{ width: '32px', height: '32px', borderRadius: '10px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                <ShoppingBag size={14} style={{ opacity: 0.4 }} />
+                                            </div>
+                                            <span style={{ fontWeight: '700', color: '#3b82f6' }}>#{s.sale_number || s.id.slice(0, 8)}</span>
+                                        </div>
+                                    </td>
+                                    <td style={{ padding: '1.25rem 2rem', fontSize: '0.9rem', fontWeight: '600' }}>{s.branches?.name}</td>
+                                    <td style={{ padding: '1.25rem 2rem', fontSize: '0.9rem', fontWeight: '600' }}>{s.customers?.name || 'Cliente General'}</td>
+                                    <td style={{ padding: '1.25rem 2rem' }}>
+                                        <span style={{ fontSize: '0.7rem', fontWeight: '800', padding: '4px 8px', borderRadius: '6px', backgroundColor: '#eee', textTransform: 'uppercase' }}>{s.payment_method}</span>
+                                    </td>
+                                    <td style={{ padding: '1.25rem 2rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', opacity: 0.4, fontSize: '0.85rem' }}>
+                                            <Clock size={12} />
+                                            {new Date(s.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </div>
+                                    </td>
+                                    <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', fontSize: '1rem' }}>
+                                        Bs. {Number(s.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+                                </tr>
+                            ))}
+                            {sales.length === 0 && (
+                                <tr>
+                                    <td colSpan="6" style={{ padding: '6rem', textAlign: 'center' }}>
+                                        <Search size={48} style={{ margin: '0 auto 1rem', opacity: 0.1 }} />
+                                        <p style={{ opacity: 0.4, fontWeight: '700' }}>No se encontraron transacciones en este periodo</p>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     )
 }

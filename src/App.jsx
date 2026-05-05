@@ -15,7 +15,8 @@ import Transfers from './pages/Transfers'
 import Reports from './pages/Reports'
 import Customers from './pages/Customers'
 import Sales from './pages/Sales'
-import Quotations from './pages/Quotations'
+import QuotationPOS from './pages/QuotationPOS'
+import QuotationHistory from './pages/QuotationHistory'
 import Classifications from './pages/Classifications'
 import { Loader2 } from 'lucide-react'
 
@@ -76,7 +77,8 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="customers" element={<Customers />} />
           <Route path="sales" element={<Sales />} />
-          <Route path="quotations" element={<Quotations />} />
+          <Route path="quotations" element={<QuotationPOS />} />
+          <Route path="quotation-history" element={<QuotationHistory />} />
           <Route path="classifications" element={<Classifications />} />
           <Route path="settings" element={<Settings />} />
         </Route>

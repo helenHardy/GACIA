@@ -19,13 +19,15 @@ import {
     ClipboardList,
     Clock,
     User,
-    X
+    X,
+    Download
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import QuotationModal from '../components/pos/QuotationModal'
 import CheckoutModal from '../components/pos/CheckoutModal'
+import { utils, writeFile } from 'xlsx'
 
-export default function Quotations() {
+export default function QuotationHistory() {
     const [quotations, setQuotations] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -71,26 +73,19 @@ export default function Quotations() {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        // 1. Get branch assignments for this user
         const { data: assignments } = await supabase
             .from('user_branches')
             .select('branch_id')
             .eq('user_id', user.id)
 
         const assignedIds = assignments?.map(a => a.branch_id) || []
-
-        // 2. Fetch branches and filter
         let query = supabase.from('branches').select('*').eq('active', true).order('name')
-
-        // If user has specific assignments, filter by them
         if (assignedIds.length > 0) {
             query = query.in('id', assignedIds)
         }
 
         const { data } = await query
         setBranches(data || [])
-
-        // Set default filter to all if user has access to multiple, or the only one if single
         if (data?.length === 1) {
             setFilterBranchId(data[0].id)
         }
@@ -124,7 +119,6 @@ export default function Quotations() {
         try {
             setIsSaving(true)
             const { data: { user } } = await supabase.auth.getUser()
-
             const { subtotal, discount, tax, total, customer_id, branch_id, valid_until, notes } = formData
 
             const { data, error: rpcError } = await supabase.rpc('register_quotation_v2', {
@@ -208,10 +202,9 @@ export default function Quotations() {
     const handlePrint = async (quotation) => {
         try {
             setLoading(true)
-            // Fetch items
             const { data: qItems, error } = await supabase
                 .from('quotation_items')
-                .select('*, products(name, sku, brand, model)')
+                .select('*, products(name, sku, brands(name), models(name))')
                 .eq('quotation_id', quotation.id)
 
             if (error) throw error
@@ -296,8 +289,8 @@ export default function Quotations() {
                                     <td>
                                         <div style="font-weight: 600;">${item.products?.name || 'Producto'}</div>
                                         <div style="color: #666; font-size: 10px;">
-                                            ${item.products?.brand ? `Marca: ${item.products.brand} | ` : ''}
-                                            ${item.products?.model ? `Modelo: ${item.products.model} | ` : ''}
+                                            ${item.products?.brands?.name ? `Marca: ${item.products.brands.name} | ` : ''}
+                                            ${item.products?.models?.name ? `Modelo: ${item.products.models.name} | ` : ''}
                                             sku: ${item.products?.sku || ''}
                                         </div>
                                     </td>
@@ -374,6 +367,77 @@ export default function Quotations() {
         }
     }
 
+    const exportToExcel = () => {
+        const data = filteredQuotations.map(q => ({
+            'Número': `#${q.quotation_number}`,
+            'Cliente': q.customers?.name || 'Cliente General',
+            'Sucursal': q.branches?.name,
+            'Estado': q.status,
+            'Fecha': new Date(q.created_at).toLocaleDateString(),
+            'Total': q.total
+        }));
+        const ws = utils.json_to_sheet(data);
+        const wb = utils.book_new();
+        utils.book_append_sheet(wb, ws, "Cotizaciones");
+        writeFile(wb, `Reporte_Cotizaciones_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    const printGeneralReport = () => {
+        const printWindow = window.open('', '_blank');
+        const content = `
+            <html>
+            <head>
+                <title>Reporte de Cotizaciones</title>
+                <style>
+                    body { font-family: sans-serif; padding: 40px; color: #1a1a1a; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 25px; }
+                    th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; font-size: 13px; }
+                    th { background-color: #f9fafb; font-weight: bold; color: #374151; }
+                    .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
+                    .footer { margin-top: 40px; text-align: right; font-weight: 900; font-size: 18px; color: #3b82f6; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1 style="margin: 0; font-size: 28px;">REPORTE GENERAL DE COTIZACIONES</h1>
+                    <p style="margin: 5px 0; opacity: 0.6;">Generado el: ${new Date().toLocaleString()}</p>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>NÚMERO</th>
+                            <th>CLIENTE</th>
+                            <th>SUCURSAL</th>
+                            <th>ESTADO</th>
+                            <th>FECHA</th>
+                            <th style="text-align: right;">TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filteredQuotations.map(q => `
+                            <tr>
+                                <td style="font-weight: bold;">#${q.quotation_number}</td>
+                                <td>${q.customers?.name || 'Cliente General'}</td>
+                                <td>${q.branches?.name}</td>
+                                <td>${q.status}</td>
+                                <td>${new Date(q.created_at).toLocaleString()}</td>
+                                <td style="text-align: right; font-weight: bold;">Bs.${q.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+                <div class="footer">
+                    <p>TOTAL GENERAL: Bs.${filteredQuotations.reduce((acc, q) => acc + (q.total || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                    <p style="font-size: 12px; font-weight: normal; color: #6b7280; margin-top: 5px;">Cotizaciones reportadas: ${filteredQuotations.length}</p>
+                </div>
+                <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); }</script>
+            </body>
+            </html>
+        `;
+        printWindow.document.write(content);
+        printWindow.document.close();
+    }
+
     const filteredQuotations = quotations.filter(q => {
         const qDate = new Date(q.created_at)
         const qLocalDate = getLocalDate(q.created_at)
@@ -395,8 +459,6 @@ export default function Quotations() {
 
         return matchesSearch && matchesBranch && matchesTime
     })
-
-    const today = getLocalDate(new Date())
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', paddingBottom: '2rem' }}>
@@ -427,7 +489,7 @@ export default function Quotations() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                    <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>Cotizaciones</h1>
+                    <h1 style={{ fontSize: '2rem', fontWeight: '900', letterSpacing: '-0.03em', margin: 0 }}>Historial de Cotizaciones</h1>
                     <p style={{ opacity: 0.5, fontWeight: '500' }}>Gestión de proformas y presupuestos para clientes</p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -440,12 +502,10 @@ export default function Quotations() {
                 </div>
             </div>
 
-            {/* Metrics Dashboard (Simplified for Quotes) */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1.5rem' }}>
+            {/* Metrics Dashboard */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
                 {[
-                    { label: 'Pendientes', val: filteredQuotations.filter(q => q.status === 'Pendiente').length, icon: <Clock size={24} />, bg: 'linear-gradient(135deg, #f59e0b, #fbbf24)', trend: 'Por convertir' },
-                    { label: 'Convertidas', val: filteredQuotations.filter(q => q.status === 'Convertido').length, icon: <CheckCircle size={24} />, bg: 'linear-gradient(135deg, #10b981, #34d399)', trend: 'Ventas cerradas' },
-                    { label: 'Total Proyectado', val: `${currencySymbol}${filteredQuotations.filter(q => q.status === 'Pendiente').reduce((acc, q) => acc + (q.total || 0), 0).toLocaleString()}`, icon: <TrendingUp size={24} />, bg: 'linear-gradient(135deg, #6366f1, #818cf8)', trend: 'En negociación' },
+                    { label: 'Total Proyectado', val: `${currencySymbol}${filteredQuotations.filter(q => q.status === 'Pendiente').reduce((acc, q) => acc + (q.total || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: <TrendingUp size={24} />, bg: 'linear-gradient(135deg, #6366f1, #818cf8)', trend: 'En negociación' },
                     { label: 'Transacciones', val: filteredQuotations.length, icon: <FileText size={24} />, bg: 'linear-gradient(135deg, #6b7280, #9ca3af)', trend: 'Citas totales' }
                 ].map((m, i) => (
                     <div key={i} className="card shadow-md" style={{ background: m.bg, color: 'white', border: 'none', padding: '1.5rem', borderRadius: '24px', display: 'flex', flexDirection: 'column', gap: '1rem', position: 'relative', overflow: 'hidden' }}>
@@ -482,8 +542,6 @@ export default function Quotations() {
                         </select>
                     </div>
 
-                    <div style={{ width: '1px', height: '2rem', backgroundColor: 'hsl(var(--border) / 0.5)', margin: '0 0.5rem' }}></div>
-
                     <div style={{ display: 'flex', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '0.25rem', borderRadius: '12px', gap: '0.25rem' }}>
                         {['day', 'month', 'year'].map(mode => (
                             <button
@@ -498,7 +556,6 @@ export default function Quotations() {
                                     cursor: 'pointer',
                                     backgroundColor: filterMode === mode ? 'white' : 'transparent',
                                     color: filterMode === mode ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground) / 0.6)',
-                                    boxShadow: filterMode === mode ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
                                     transition: 'all 0.2s'
                                 }}
                             >
@@ -508,64 +565,31 @@ export default function Quotations() {
                     </div>
 
                     {filterMode === 'day' && (
-                        <div style={{ minWidth: '150px' }}>
-                            <input
-                                type="date"
-                                style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
-                                value={filterDay}
-                                onChange={(e) => setFilterDay(e.target.value)}
-                            />
-                        </div>
-                    )}
-                    {filterMode === 'month' && (
-                        <>
-                            <div style={{ minWidth: '120px' }}>
-                                <select
-                                    style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
-                                    value={filterMonth}
-                                    onChange={(e) => setFilterMonth(e.target.value)}
-                                >
-                                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'].map(m => (
-                                        <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString('es', { month: 'long' }).toUpperCase()}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div style={{ minWidth: '100px' }}>
-                                <select
-                                    style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
-                                    value={filterYear}
-                                    onChange={(e) => setFilterYear(e.target.value)}
-                                >
-                                    {[2024, 2025, 2026].map(y => <option key={y} value={y.toString()}>{y}</option>)}
-                                </select>
-                            </div>
-                        </>
-                    )}
-                    {filterMode === 'year' && (
-                        <div style={{ minWidth: '100px' }}>
-                            <select
-                                style={{ width: '100%', padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
-                                value={filterYear}
-                                onChange={(e) => setFilterYear(e.target.value)}
-                            >
-                                {[2024, 2025, 2026].map(y => <option key={y} value={y.toString()}>{y}</option>)}
-                            </select>
-                        </div>
+                        <input
+                            type="date"
+                            style={{ padding: '0.85rem 1rem', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '14px', border: 'none', fontWeight: '700', fontSize: '0.9rem', outline: 'none' }}
+                            value={filterDay}
+                            onChange={(e) => setFilterDay(e.target.value)}
+                        />
                     )}
                 </div>
 
-                <button
-                    onClick={() => {
-                        setFilterBranchId('all');
-                        setFilterMode('day');
-                        setFilterDay(getLocalDate(new Date()));
-                        setSearchTerm('');
-                    }}
-                    className="btn"
-                    style={{ gap: '0.5rem', borderRadius: '12px', padding: '0.75rem 1.25rem', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))' }}
-                >
-                    Limpiar
-                </button>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={exportToExcel} className="btn" style={{ padding: '0.85rem 1.5rem', borderRadius: '14px', backgroundColor: 'hsl(142 76% 36% / 0.1)', color: 'hsl(142 76% 36%)', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Download size={18} /> Excel</button>
+                    <button onClick={printGeneralReport} className="btn" style={{ padding: '0.85rem 1.5rem', borderRadius: '14px', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Printer size={18} /> Reporte</button>
+                    <button
+                        onClick={() => {
+                            setFilterBranchId('all');
+                            setFilterMode('day');
+                            setFilterDay(getLocalDate(new Date()));
+                            setSearchTerm('');
+                        }}
+                        className="btn"
+                        style={{ borderRadius: '14px', padding: '0.85rem 1.5rem', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))', fontWeight: '800' }}
+                    >
+                        Limpiar
+                    </button>
+                </div>
             </div>
 
             {/* List */}
@@ -633,7 +657,7 @@ export default function Quotations() {
                                         </div>
                                     </td>
                                     <td style={{ padding: '1.25rem', textAlign: 'right' }}>
-                                        <span style={{ fontSize: '1.1rem', fontWeight: '900' }}>{currencySymbol}{q.total?.toLocaleString()}</span>
+                                        <span style={{ fontSize: '1.1rem', fontWeight: '900' }}>{currencySymbol}{q.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                     </td>
                                     <td style={{ padding: '1.25rem', textAlign: 'right' }}>
                                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>

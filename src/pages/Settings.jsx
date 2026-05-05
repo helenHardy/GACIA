@@ -744,7 +744,7 @@ export default function Settings() {
                                     <h3 style={{ fontSize: '1.25rem', fontWeight: '700' }}>Zona de Peligro: Limpieza de Base de Datos</h3>
                                 </div>
                                 <p style={{ color: 'hsl(var(--destructive))', fontWeight: '600', marginBottom: '1.5rem' }}>
-                                    ¡Atención! Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, productos, clientes, compras, sucursales secundarias y perfiles de usuario (excepto admin@gmail.com y Casa Matriz).
+                                    ¡Atención! Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, productos, clientes, compras, sucursales secundarias y perfiles de usuario (excepto el usuario administrador y la sucursal Casa Matriz).
                                 </p>
 
                                 {!showCleanupConfirm ? (

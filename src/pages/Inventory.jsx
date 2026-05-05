@@ -315,7 +315,12 @@ export default function Inventory() {
         )
         .filter(p => !selectedBrandId || p.brand_id === selectedBrandId)
         .filter(p => !selectedBrand || p.brand_id === selectedBrand.id)
-        .filter(p => (p.current_stock || 0) > 0)
+        .filter(p => !selectedModelId || p.model_id === selectedModelId)
+        .filter(p => {
+            const isCasaMatriz = branches.find(b => b.id === selectedBranchId)?.name.includes('Casa Matriz')
+            if (isCasaMatriz) return true
+            return (p.current_stock || 0) > 0
+        })
 
     return (
         <div style={{ position: 'relative', paddingBottom: '2rem' }}>
@@ -432,7 +437,63 @@ export default function Inventory() {
                 ))}
             </div>
 
-            {/* Quick Access Brand Bar (Only when brand selected) */}
+            {/* Level 1: Brands Selector Bar */}
+            <div style={{ 
+                display: 'flex', 
+                gap: '0.75rem', 
+                overflowX: 'auto', 
+                paddingBottom: '0.5rem', 
+                marginBottom: '1rem',
+                msOverflowStyle: 'none', 
+                scrollbarWidth: 'none',
+                borderBottom: '1px solid hsl(var(--border) / 0.3)'
+            }}>
+                <button 
+                    onClick={() => {
+                        setSelectedBrand(null)
+                        setSelectedModelId('')
+                    }}
+                    style={{
+                        padding: '0.5rem 1.5rem',
+                        borderRadius: '100px',
+                        backgroundColor: !selectedBrand ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                        color: !selectedBrand ? 'white' : 'inherit',
+                        border: 'none',
+                        fontSize: '0.85rem',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.2s ease'
+                    }}
+                >
+                    TODAS
+                </button>
+                {brands.map(b => (
+                    <button 
+                        key={b.id}
+                        onClick={() => {
+                            setSelectedBrand(b)
+                            setSelectedModelId('')
+                        }}
+                        style={{
+                            padding: '0.5rem 1.5rem',
+                            borderRadius: '100px',
+                            backgroundColor: selectedBrand?.id === b.id ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.3)',
+                            color: selectedBrand?.id === b.id ? 'white' : 'inherit',
+                            border: 'none',
+                            fontSize: '0.85rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        {b.name}
+                    </button>
+                ))}
+            </div>
+
+            {/* Level 2: Product Lines (Models) Selector Bar */}
             {selectedBrand && (
                 <div style={{ 
                     display: 'flex', 
@@ -442,26 +503,42 @@ export default function Inventory() {
                     marginBottom: '1rem',
                     msOverflowStyle: 'none', 
                     scrollbarWidth: 'none',
-                    borderBottom: '1px solid hsl(var(--border) / 0.3)'
+                    borderBottom: '1px solid hsl(var(--border) / 0.3)',
+                    animation: 'fadeInDown 0.3s ease-out'
                 }}>
-                    {brands.filter(b => products.some(p => p.brand_id === b.id && p.current_stock > 0)).map(b => (
+                    <button 
+                        onClick={() => setSelectedModelId('')}
+                        style={{
+                            padding: '0.4rem 1.25rem',
+                            borderRadius: '100px',
+                            backgroundColor: !selectedModelId ? 'hsl(var(--primary) / 0.8)' : 'hsl(var(--secondary) / 0.4)',
+                            color: !selectedModelId ? 'white' : 'inherit',
+                            border: 'none',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                        }}
+                    >
+                        Todos los productos
+                    </button>
+                    {models.filter(m => m.brand_id === selectedBrand.id).map(m => (
                         <button 
-                            key={b.id}
-                            onClick={() => setSelectedBrand(b)}
+                            key={m.id}
+                            onClick={() => setSelectedModelId(m.id)}
                             style={{
-                                padding: '0.5rem 1.25rem',
+                                padding: '0.4rem 1.25rem',
                                 borderRadius: '100px',
-                                backgroundColor: selectedBrand?.id === b.id ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
-                                color: selectedBrand?.id === b.id ? 'white' : 'inherit',
+                                backgroundColor: selectedModelId === m.id ? 'hsl(var(--primary) / 0.8)' : 'hsl(var(--secondary) / 0.2)',
+                                color: selectedModelId === m.id ? 'white' : 'inherit',
                                 border: 'none',
-                                fontSize: '0.85rem',
+                                fontSize: '0.8rem',
                                 fontWeight: '700',
                                 cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all 0.2s ease'
+                                whiteSpace: 'nowrap'
                             }}
                         >
-                            {b.name}
+                            {m.name}
                         </button>
                     ))}
                 </div>
@@ -470,7 +547,7 @@ export default function Inventory() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     {selectedBrand && (
-                        <button className="btn-icon" onClick={() => setSelectedBrand(null)} style={{ padding: '0.5rem', borderRadius: '50%', backgroundColor: 'hsl(var(--secondary) / 0.5)', border: 'none', cursor: 'pointer' }}>
+                        <button className="btn-icon" onClick={() => { setSelectedBrand(null); setSelectedModelId(''); }} style={{ padding: '0.5rem', borderRadius: '50%', backgroundColor: 'hsl(var(--secondary) / 0.5)', border: 'none', cursor: 'pointer' }}>
                             <ArrowLeft size={24} />
                         </button>
                     )}
@@ -479,9 +556,31 @@ export default function Inventory() {
                             {selectedBrand ? selectedBrand.name : 'Inventario'}
                         </h1>
                         <p style={{ opacity: 0.5, fontWeight: '500', margin: 0 }}>
-                            {selectedBrand ? `Productos de la marca ${selectedBrand.name}` : 'Gestión de existencias por sucursal'}
+                            {selectedModelId ? `Mostrando modelos de ${models.find(m => m.id === selectedModelId)?.name}` : (selectedBrand ? `Líneas de productos de ${selectedBrand.name}` : 'Gestión de existencias por sucursal')}
                         </p>
                     </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button 
+                        onClick={handleExport}
+                        className="btn"
+                        style={{ 
+                            padding: '0.6rem 1.5rem', 
+                            borderRadius: '14px', 
+                            backgroundColor: '#10b981', 
+                            color: 'white', 
+                            fontWeight: '800',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            border: 'none',
+                            fontSize: '0.9rem'
+                        }}
+                    >
+                        <Download size={18} />
+                        EXPORTAR EXCEL
+                    </button>
                 </div>
             </div>
 

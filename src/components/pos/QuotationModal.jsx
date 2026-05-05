@@ -7,8 +7,10 @@ import ProductGrid from './ProductGrid'
 export default function QuotationModal({ quotation, onClose, onSave, isSaving, currencySymbol = 'Bs.' }) {
     const [cart, setCart] = useState([])
     const [searchTerm, setSearchTerm] = useState('')
-    const [brands, setBrands] = useState([{ id: 'all', name: 'Todos' }])
-    const [selectedBrandId, setSelectedBrandId] = useState('all')
+    const [brands, setBrands] = useState([])
+    const [selectedBrandId, setSelectedBrandId] = useState(null)
+    const [selectedModelId, setSelectedModelId] = useState(null)
+    const [models, setModels] = useState([])
     const [isBrandListOpen, setIsBrandListOpen] = useState(false)
     const [viewMode, setViewMode] = useState('list')
     const [gridRefreshKey, setGridRefreshKey] = useState(0)
@@ -82,12 +84,31 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
             const { data, error } = await supabase.from('brands').select(`id, name, products!inner(id, settings:product_branch_settings!inner(stock, branch_id))`).eq('products.settings.branch_id', branchId).gt('products.settings.stock', 0).order('name')
             if (error) throw error
             const unique = data.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
-            setBrands([{ id: 'all', name: 'Todos' }, ...unique])
+            setBrands(unique)
         } catch {
             const { data } = await supabase.from('brands').select('*').order('name')
-            if (data) setBrands([{ id: 'all', name: 'Todos' }, ...data])
+            if (data) setBrands(data)
         }
     }
+
+    async function fetchModels(brandId) {
+        if (!brandId) {
+            setModels([])
+            return
+        }
+        const { data } = await supabase.from('models').select('*').eq('brand_id', brandId).order('name')
+        setModels(data || [])
+    }
+
+    useEffect(() => {
+        if (selectedBrandId) {
+            fetchModels(selectedBrandId)
+            setSelectedModelId(null)
+        } else {
+            setModels([])
+            setSelectedModelId(null)
+        }
+    }, [selectedBrandId])
 
     const addToCart = (product, quantity = 1) => {
         setCart(prev => {
@@ -238,12 +259,13 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
                             <div className="card shadow-sm" style={{ padding: '1rem', borderRadius: '20px' }}>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', marginBottom: '1rem' }}>
                                     <div style={{ position: 'relative' }}>
-                                        <button onClick={() => setIsBrandListOpen(!isBrandListOpen)} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.5)', backgroundColor: 'white', fontWeight: '700', display: 'flex', justifyContent: 'space-between' }}>
-                                            <span>{brands.find(b => b.id === selectedBrandId)?.name || 'Marca...'}</span>
+                                        <button onClick={() => setIsBrandListOpen(!isBrandListOpen)} style={{ width: '100%', padding: '0.7rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.5)', backgroundColor: 'white', fontWeight: '700', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <span>{brands.find(b => b.id === selectedBrandId)?.name || 'Seleccionar Marca...'}</span>
                                             <ChevronRight size={16} />
                                         </button>
                                         {isBrandListOpen && (
-                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 120, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 15px rgba(0,0,0,0.1)', padding: '0.5rem' }}>
+                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 120, backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 15px rgba(0,0,0,0.1)', padding: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                                                <div onClick={() => { setSelectedBrandId(null); setIsBrandListOpen(false) }} style={{ padding: '0.6rem', cursor: 'pointer', borderRadius: '8px', fontWeight: '700', color: 'hsl(var(--primary))' }}>Ver Todos</div>
                                                 {brands.map(b => <div key={b.id} onClick={() => { setSelectedBrandId(b.id); setIsBrandListOpen(false) }} style={{ padding: '0.6rem', cursor: 'pointer', borderRadius: '8px', fontWeight: '700' }}>{b.name}</div>)}
                                             </div>
                                         )}
@@ -253,7 +275,50 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
                                         <input type="text" placeholder="Buscar productos..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ width: '100%', padding: '0.7rem 0.7rem 0.7rem 2.5rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.5)', outline: 'none', fontWeight: '700' }} />
                                     </div>
                                 </div>
-                                <ProductGrid searchTerm={searchTerm} branchId={branchId} brandId={selectedBrandId} onAddToCart={addToCart} currencySymbol={currencySymbol} viewMode="grid" stockFilter="in-stock" />
+
+                                {selectedBrandId && models.length > 0 && (
+                                    <div className="no-scrollbar" style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', marginBottom: '1.5rem', paddingBottom: '0.5rem' }}>
+                                        <button
+                                            onClick={() => setSelectedModelId(null)}
+                                            style={{
+                                                padding: '0.5rem 1rem',
+                                                borderRadius: '100px',
+                                                border: 'none',
+                                                backgroundColor: !selectedModelId ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                                                color: !selectedModelId ? 'white' : 'hsl(var(--secondary-foreground))',
+                                                fontSize: '0.75rem',
+                                                fontWeight: '800',
+                                                whiteSpace: 'nowrap',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            TODOS
+                                        </button>
+                                        {models.map(m => (
+                                            <button
+                                                key={m.id}
+                                                onClick={() => setSelectedModelId(m.id)}
+                                                style={{
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '100px',
+                                                    border: 'none',
+                                                    backgroundColor: selectedModelId === m.id ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                                                    color: selectedModelId === m.id ? 'white' : 'hsl(var(--secondary-foreground))',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    whiteSpace: 'nowrap',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                {m.name.toUpperCase()}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <ProductGrid searchTerm={searchTerm} branchId={branchId} brandId={selectedBrandId} modelId={selectedModelId} onAddToCart={addToCart} currencySymbol={currencySymbol} viewMode="grid" stockFilter="in-stock" />
                             </div>
                         )}
                     </div>

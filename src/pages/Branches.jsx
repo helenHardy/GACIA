@@ -160,24 +160,24 @@ export default function Branches() {
                     <p>Agrega tu primera sucursal para comenzar a gestionar tus puntos de venta.</p>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem', opacity: loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
-                    {branches.map(branch => (
-                        <div key={branch.id} className="card" style={{ position: 'relative', overflow: 'hidden' }}>
-                            <div style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '4px',
-                                height: '100%',
-                                backgroundColor: branch.active ? 'hsl(142 76% 36%)' : 'hsl(var(--secondary))'
-                            }} />
-
-                            <div style={{ paddingLeft: '0.5rem' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '1rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className="card shadow-sm" style={{ padding: 0, borderRadius: '24px', overflow: 'hidden', border: '1px solid hsl(var(--border) / 0.6)' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ backgroundColor: 'hsl(var(--secondary) / 0.3)' }}>
+                        <tr>
+                            <th style={{ padding: '1.25rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Sucursal</th>
+                            <th style={{ padding: '1.25rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Ubicación / Contacto</th>
+                            <th style={{ padding: '1.25rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Estado</th>
+                            <th style={{ padding: '1.25rem', textAlign: 'right', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {branches.map(branch => (
+                            <tr key={branch.id} style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)', opacity: loading ? 0.6 : 1, transition: 'opacity 0.2s' }}>
+                                <td style={{ padding: '1.25rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                         <div style={{
-                                            width: '48px', height: '48px',
-                                            borderRadius: 'var(--radius)',
+                                            width: '40px', height: '40px',
+                                            borderRadius: '12px',
                                             backgroundColor: 'hsl(var(--secondary))',
                                             color: 'hsl(var(--foreground))',
                                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -187,71 +187,81 @@ export default function Branches() {
                                             {branch.logo_url ? (
                                                 <img src={branch.logo_url} alt={branch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                             ) : (
-                                                <Building2 size={24} style={{ opacity: 0.5 }} />
+                                                <Building2 size={20} style={{ opacity: 0.5 }} />
                                             )}
                                         </div>
                                         <div>
-                                            <h3 style={{ fontSize: '1.125rem', fontWeight: '600' }}>{branch.name}</h3>
-                                            <span style={{
-                                                fontSize: '0.75rem',
-                                                padding: '0.125rem 0.5rem',
-                                                borderRadius: '999px',
-                                                backgroundColor: branch.active ? 'hsl(142 76% 36% / 0.1)' : 'hsl(var(--secondary))',
-                                                color: branch.active ? 'hsl(142 76% 36%)' : 'hsl(var(--secondary-foreground))'
-                                            }}>
-                                                {branch.active ? 'Activa' : 'Inactiva'}
-                                            </span>
+                                            <h3 style={{ fontSize: '1rem', fontWeight: '800', margin: 0 }}>{branch.name}</h3>
+                                            {defaultBranchId === branch.id.toString() && (
+                                                <span style={{ fontSize: '0.65rem', fontWeight: '900', color: 'hsl(var(--primary))', textTransform: 'uppercase' }}>Sucursal Principal</span>
+                                            )}
                                         </div>
                                     </div>
-
-                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                </td>
+                                <td style={{ padding: '1.25rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: '600' }}>
+                                            <MapPin size={14} style={{ opacity: 0.5 }} />
+                                            <span>{branch.address || 'Sin dirección'}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: 'hsl(var(--secondary-foreground) / 0.6)' }}>
+                                            <Phone size={14} style={{ opacity: 0.5 }} />
+                                            <span>{branch.phone || 'Sin teléfono'}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td style={{ padding: '1.25rem' }}>
+                                    <span style={{
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        padding: '4px 12px',
+                                        borderRadius: '99px',
+                                        backgroundColor: branch.active ? 'hsl(142 76% 36% / 0.1)' : 'hsl(var(--secondary))',
+                                        color: branch.active ? 'hsl(142 76% 36%)' : 'hsl(var(--secondary-foreground))'
+                                    }}>
+                                        {branch.active ? 'ACTIVA' : 'INACTIVA'}
+                                    </span>
+                                </td>
+                                <td style={{ padding: '1.25rem', textAlign: 'right' }}>
+                                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
                                         <button
                                             className="btn"
-                                            title={defaultBranchId === branch.id.toString() ? "Sucursal principal para ingresos y traspasos" : "Establecer como principal para ingresos y traspasos"}
+                                            title="Establecer como principal"
                                             style={{
-                                                padding: '0.5rem',
-                                                color: defaultBranchId === branch.id.toString() ? 'hsl(var(--primary))' : 'hsl(var(--secondary-foreground) / 0.4)',
-                                                backgroundColor: defaultBranchId === branch.id.toString() ? 'hsl(var(--primary) / 0.1)' : 'transparent',
-                                                borderRadius: '8px'
+                                                padding: '0.6rem',
+                                                color: defaultBranchId === branch.id.toString() ? 'white' : 'hsl(var(--secondary-foreground) / 0.4)',
+                                                backgroundColor: defaultBranchId === branch.id.toString() ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.5)',
+                                                borderRadius: '10px',
+                                                border: 'none'
                                             }}
                                             onClick={() => setDefaultBranch(branch.id)}
                                         >
-                                            <Building2 size={16} />
+                                            <Building2 size={18} />
                                         </button>
                                         <button
                                             className="btn"
-                                            style={{ padding: '0.5rem', color: 'hsl(var(--secondary-foreground))' }}
+                                            style={{ padding: '0.6rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)' }}
                                             onClick={() => {
                                                 setEditingBranch(branch)
                                                 setIsModalOpen(true)
                                             }}
                                         >
-                                            <Edit2 size={16} />
+                                            <Edit2 size={18} />
                                         </button>
                                         <button
                                             className="btn"
-                                            style={{ padding: '0.5rem', color: 'hsl(var(--destructive))' }}
+                                            style={{ padding: '0.6rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }}
                                             onClick={() => handleDelete(branch.id)}
                                         >
-                                            <Trash2 size={16} />
+                                            <Trash2 size={18} />
                                         </button>
                                     </div>
-                                </div>
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.875rem', color: 'hsl(var(--secondary-foreground))' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <MapPin size={16} />
-                                        <span>{branch.address || 'Sin dirección'}</span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <Phone size={16} />
-                                        <span>{branch.phone || 'Sin teléfono'}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
             )}
         </div>
     )
