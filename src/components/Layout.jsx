@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
@@ -19,6 +19,7 @@ import {
     Layers,
     ChevronRight,
     ChevronLeft,
+    ChevronDown,
     MapPin,
     Bell
 } from 'lucide-react'
@@ -112,27 +113,41 @@ export default function Layout() {
     }
 
     const allNavItems = [
-        { to: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard', key: 'dashboard' },
-        { to: '/pos', icon: <ShoppingCart size={20} />, label: 'Punto de Venta', key: 'pos' },
-        { to: '/sales', icon: <History size={20} />, label: 'Historial Ventas', key: 'sales' },
-        { to: '/quotations', icon: <FileText size={20} />, label: 'Cotizar', key: 'quotations' },
-        { to: '/quotation-history', icon: <History size={20} />, label: 'Historial Cotizaciones', key: 'quotations' },
-        { to: '/inventory', icon: <Package size={20} />, label: 'Inventario', key: 'inventory' },
-        { to: '/branches', icon: <Building2 size={20} />, label: 'Sucursales', key: 'branches' },
-        { to: '/purchases', icon: <ClipboardList size={20} />, label: 'Cargar Inventario', key: 'purchases' },
-        { to: '/transfers', icon: <ArrowLeftRight size={20} />, label: 'Traspasos', key: 'transfers' },
-        { to: '/reports', icon: <FileText size={20} />, label: 'Reportes', key: 'reports' },
-        { to: '/customers', icon: <Contact size={20} />, label: 'Clientes', key: 'customers' },
-        { to: '/users', icon: <UserRoundCog size={20} />, label: 'Usuarios', key: 'users' },
-        { to: '/classifications', icon: <Layers size={20} />, label: 'Clasificaciones', key: 'classifications' },
-        { to: '/settings', icon: <Settings size={20} />, label: 'Configuración', key: 'settings' },
+        { to: '/', icon: <LayoutDashboard size={18} />, label: 'Dashboard', key: 'dashboard' },
+        { to: '/pos', icon: <ShoppingCart size={18} />, label: 'Punto de Venta', key: 'pos' },
+        { to: '/sales', icon: <History size={18} />, label: 'Historial Ventas', key: 'sales' },
+        { to: '/quotations', icon: <FileText size={18} />, label: 'Cotizar', key: 'quotations' },
+        { to: '/quotation-history', icon: <History size={18} />, label: 'Historial Cotizaciones', key: 'quotations' },
+        { to: '/inventory', icon: <Package size={18} />, label: 'Inventario', key: 'inventory' },
+        { to: '/branches', icon: <Building2 size={18} />, label: 'Sucursales', key: 'branches' },
+        { to: '/purchases', icon: <ClipboardList size={18} />, label: 'Cargar Inventario', key: 'purchases' },
+        { to: '/transfers', icon: <ArrowLeftRight size={18} />, label: 'Traspasos', key: 'transfers' },
+        { to: '/reports', icon: <FileText size={18} />, label: 'Reportes', key: 'reports' },
+        { to: '/customers', icon: <Contact size={18} />, label: 'Clientes', key: 'customers' },
+        { to: '/users', icon: <UserRoundCog size={18} />, label: 'Usuarios', key: 'users' },
+        { to: '/classifications', icon: <Layers size={18} />, label: 'Clasificaciones', key: 'classifications' },
+        { to: '/settings', icon: <Settings size={18} />, label: 'Configuración', key: 'settings' },
     ]
 
     const navItems = allNavItems.filter(item =>
         userRole === 'Administrador' || allowedMenuKeys.includes(item.key)
     )
 
+    // Organizar en grupos
+    const navGroups = [
+        { id: 'main', label: null, keys: ['dashboard'] },
+        { id: 'ventas', label: 'Ventas', keys: ['pos', 'sales', 'quotations'] },
+        { id: 'inventario', label: 'Inventario', keys: ['inventory', 'purchases', 'transfers', 'classifications'] },
+        { id: 'gestion', label: 'Gestión', keys: ['branches', 'customers', 'users', 'reports'] },
+        { id: 'config', label: null, keys: ['settings'] },
+    ]
+
+    const [openGroups, setOpenGroups] = useState({ ventas: true, inventario: true, gestion: true })
+    const toggleGroup = (id) => setOpenGroups(prev => ({ ...prev, [id]: !prev[id] }))
+
     const [tooltip, setTooltip] = useState(null)
+    const [flyout, setFlyout] = useState(null)
+    const flyoutTimer = useRef(null)
 
     const handleMouseEnter = (label, e) => {
         if (!collapsed) return
@@ -146,6 +161,22 @@ export default function Layout() {
 
     const handleMouseLeave = () => {
         setTooltip(null)
+    }
+
+    const startFlyoutClose = () => {
+        flyoutTimer.current = setTimeout(() => setFlyout(null), 300)
+    }
+
+    const cancelFlyoutClose = () => {
+        if (flyoutTimer.current) clearTimeout(flyoutTimer.current)
+    }
+
+    const handleGroupHover = (group, groupItems, e) => {
+        if (!collapsed || !group.label) return
+        cancelFlyoutClose()
+        setTooltip(null)
+        const rect = e.currentTarget.getBoundingClientRect()
+        setFlyout({ label: group.label, items: groupItems, top: rect.top, left: rect.right + 6 })
     }
 
     return (
@@ -204,18 +235,84 @@ export default function Layout() {
                     </button>
                 </div>
 
-                <nav className="sidebar-nav" onMouseLeave={handleMouseLeave}>
-                    {navItems.map((item) => (
-                        <NavLink
-                            key={item.to}
-                            to={item.to}
-                            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                            onMouseEnter={(e) => handleMouseEnter(item.label, e)}
-                        >
-                            {item.icon}
-                            <span>{item.label}</span>
-                        </NavLink>
-                    ))}
+                <nav className="sidebar-nav" onMouseLeave={() => { handleMouseLeave(); startFlyoutClose(); }}>
+                    {navGroups.map(group => {
+                        const groupItems = navItems.filter(item => group.keys.includes(item.key))
+                        if (groupItems.length === 0) return null
+                        const isOpen = !group.label || openGroups[group.id]
+
+                        if (collapsed) {
+                            if (!group.label) {
+                                return groupItems.map(item => (
+                                    <NavLink
+                                        key={item.to}
+                                        to={item.to}
+                                        className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                                        onMouseEnter={(e) => { setFlyout(null); handleMouseEnter(item.label, e); }}
+                                    >
+                                        {item.icon}
+                                        <span>{item.label}</span>
+                                    </NavLink>
+                                ))
+                            }
+                            const firstIcon = groupItems[0].icon
+                            return (
+                                <div
+                                    key={group.id}
+                                    className="nav-item"
+                                    style={{ cursor: 'pointer' }}
+                                    onMouseEnter={(e) => handleGroupHover(group, groupItems, e)}
+                                >
+                                    {firstIcon}
+                                </div>
+                            )
+                        }
+
+                        return (
+                            <div key={group.id} style={{ marginBottom: '0.15rem' }}>
+                                {group.label && (
+                                    <button
+                                        onClick={() => toggleGroup(group.id)}
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '0.35rem 0.85rem',
+                                            marginTop: '0.25rem',
+                                            background: 'none',
+                                            border: 'none',
+                                            color: 'rgba(255,255,255,0.4)',
+                                            fontSize: '0.65rem',
+                                            fontWeight: '800',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.08em',
+                                            cursor: 'pointer',
+                                            transition: 'color 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
+                                        onMouseLeave={(e) => e.currentTarget.style.color = 'rgba(255,255,255,0.4)'}
+                                    >
+                                        <span>{group.label}</span>
+                                        <ChevronDown size={14} style={{ transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }} />
+                                    </button>
+                                )}
+                                <div style={{ overflow: 'hidden', maxHeight: isOpen ? '500px' : '0px', transition: 'max-height 0.25s ease' }}>
+                                    {groupItems.map(item => (
+                                        <NavLink
+                                            key={item.to}
+                                            to={item.to}
+                                            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                                            style={group.label ? { paddingLeft: '1.5rem' } : {}}
+                                        >
+                                            {item.icon}
+                                            <span>{item.label}</span>
+                                        </NavLink>
+                                    ))}
+                                </div>
+                            </div>
+                        )
+                    })}
                 </nav>
 
                 <div className="sidebar-footer">
@@ -270,7 +367,8 @@ export default function Layout() {
                 </div>
             </main>
 
-            {tooltip && collapsed && (
+            {/* Tooltip simple para ítems sueltos */}
+            {tooltip && collapsed && !flyout && (
                 <div
                     style={{
                         position: 'fixed',
@@ -280,34 +378,74 @@ export default function Layout() {
                         backgroundColor: '#1e293b',
                         color: 'white',
                         padding: '0.5rem 1rem',
-                        borderRadius: '6px',
-                        fontSize: '0.875rem',
-                        fontWeight: '500',
+                        borderRadius: '8px',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
                         whiteSpace: 'nowrap',
                         zIndex: 1000,
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                        boxShadow: '0 8px 25px rgba(0,0,0,0.25)',
                         pointerEvents: 'none',
-                        animation: 'fadeIn 0.2s ease-out'
+                        animation: 'flyoutIn 0.15s ease-out'
                     }}
                 >
                     {tooltip.label}
-                    {/* Arrow */}
                     <div style={{
-                        position: 'absolute',
-                        left: '-4px',
-                        top: '50%',
+                        position: 'absolute', left: '-4px', top: '50%',
                         transform: 'translateY(-50%) rotate(45deg)',
-                        width: '8px',
-                        height: '8px',
-                        backgroundColor: '#1e293b',
-                        zIndex: -1
+                        width: '8px', height: '8px', backgroundColor: '#1e293b', zIndex: -1
                     }} />
                 </div>
             )}
+
+            {/* Flyout popup para grupos */}
+            {flyout && collapsed && (
+                <div
+                    onMouseEnter={cancelFlyoutClose}
+                    onMouseLeave={() => setFlyout(null)}
+                    style={{
+                        position: 'fixed',
+                        top: flyout.top,
+                        left: flyout.left - 10,
+                        paddingLeft: '10px',
+                        zIndex: 1000,
+                    }}
+                >
+                  <div style={{
+                        backgroundColor: '#1e293b',
+                        borderRadius: '12px',
+                        padding: '0.5rem',
+                        minWidth: '200px',
+                        boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
+                        animation: 'flyoutIn 0.15s ease-out'
+                    }}>
+                    <div style={{ padding: '0.4rem 0.75rem 0.5rem', fontSize: '0.65rem', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.35)' }}>
+                        {flyout.label}
+                    </div>
+                    {flyout.items.map(item => (
+                        <NavLink
+                            key={item.to}
+                            to={item.to}
+                            onClick={() => setFlyout(null)}
+                            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                            style={{ borderRadius: '8px', fontSize: '0.88rem' }}
+                        >
+                            {item.icon}
+                            <span>{item.label}</span>
+                        </NavLink>
+                    ))}
+                    <div style={{
+                        position: 'absolute', left: '5px', top: '18px',
+                        transform: 'rotate(45deg)',
+                        width: '10px', height: '10px', backgroundColor: '#1e293b', zIndex: -1
+                    }} />
+                  </div>
+                </div>
+            )}
+
             <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-50%) translateX(-5px); }
-                    to { opacity: 1; transform: translateY(-50%) translateX(0); }
+                @keyframes flyoutIn {
+                    from { opacity: 0; transform: translateX(-8px); }
+                    to { opacity: 1; transform: translateX(0); }
                 }
             `}</style>
         </div>
