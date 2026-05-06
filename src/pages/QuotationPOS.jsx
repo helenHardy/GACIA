@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Search, ShoppingCart, Trash2, Wallet, Building2, Printer, CheckCircle, X, Tag, ChevronRight, Layers, LayoutGrid, RefreshCw, ClipboardList, FileText, Calendar, User } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, Wallet, Building2, Printer, CheckCircle, X, Tag, ChevronRight, Layers, LayoutGrid, RefreshCw, ClipboardList, FileText, Calendar, User, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import ProductGrid from '../components/pos/ProductGrid'
 import Cart from '../components/pos/Cart'
+import CustomerModal from '../components/customers/CustomerModal'
 import { useBranch } from '../context/BranchContext'
 
 export default function QuotationPOS() {
@@ -26,8 +27,11 @@ export default function QuotationPOS() {
     const [customerSearch, setCustomerSearch] = useState('')
     const [isCustomerListOpen, setIsCustomerListOpen] = useState(false)
     const [selectedCustomerId, setSelectedCustomerId] = useState(null)
+    const [quickCustomerData, setQuickCustomerData] = useState({ name: '', tax_id: '' })
     const [validUntil, setValidUntil] = useState(new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE'))
     const [notes, setNotes] = useState('')
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false)
+    const [isSavingCustomer, setIsSavingCustomer] = useState(false)
 
     const { selectedBranchId, branches } = useBranch()
 
@@ -68,6 +72,29 @@ export default function QuotationPOS() {
         setCurrencySymbol(symbol)
     }
 
+    const handleSaveCustomer = async (formData) => {
+        try {
+            setIsSavingCustomer(true)
+            const { data, error } = await supabase
+                .from('customers')
+                .insert([formData])
+                .select()
+                .single()
+
+            if (error) throw error
+
+            await fetchCustomers()
+            setSelectedCustomerId(data.id)
+            setCustomerSearch(data.name)
+            setIsCustomerModalOpen(false)
+        } catch (err) {
+            console.error(err)
+            alert('Error al registrar cliente: ' + err.message)
+        } finally {
+            setIsSavingCustomer(false)
+        }
+    }
+
     async function fetchModels() {
         const { data } = await supabase.from('models').select('*').order('name')
         if (data) setModels(data)
@@ -97,6 +124,8 @@ export default function QuotationPOS() {
 
     const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.id !== productId))
     const updateQuantity = (productId, delta) => setCart(prev => prev.map(item => item.id === productId ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item))
+    const setQuantity = (productId, val) => setCart(prev => prev.map(item => item.id === productId ? { ...item, quantity: Math.max(0, val) } : item))
+    const setPrice = (productId, val) => setCart(prev => prev.map(item => item.id === productId ? { ...item, price: Math.max(0, val) } : item))
 
     const handlePrint = async (quotationInput) => {
         try {
@@ -329,10 +358,31 @@ export default function QuotationPOS() {
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                             <div style={{ position: 'relative' }}>
-                                <label style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.4, marginBottom: '0.5rem', display: 'block' }}>Cliente</label>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                    <label style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.4 }}>Cliente</label>
+                                    <button onClick={() => setIsCustomerModalOpen(true)} className="btn" style={{ padding: '0.2rem 0.6rem', fontSize: '0.65rem', borderRadius: '8px', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                                        <Plus size={12} /> NUEVO
+                                    </button>
+                                </div>
                                 <div style={{ position: 'relative' }}>
                                     <User size={18} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }} />
-                                    <input type="text" placeholder="Buscar cliente..." value={customerSearch} onFocus={() => setIsCustomerListOpen(true)} onChange={(e) => { setCustomerSearch(e.target.value); setIsCustomerListOpen(true) }} style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1.5px solid hsl(var(--primary) / 0.1)', backgroundColor: 'hsl(var(--secondary) / 0.2)', fontSize: '0.95rem', fontWeight: '700', outline: 'none' }} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Buscar cliente..." 
+                                        value={customerSearch} 
+                                        onFocus={() => setIsCustomerListOpen(true)} 
+                                        onChange={(e) => { setCustomerSearch(e.target.value); setIsCustomerListOpen(true) }} 
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                const filtered = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()));
+                                                if (filtered.length === 0 && customerSearch.trim().length > 0) {
+                                                    setQuickCustomerData({ name: customerSearch, tax_id: '' });
+                                                    setIsCustomerModalOpen(true);
+                                                }
+                                            }
+                                        }}
+                                        style={{ width: '100%', padding: '0.85rem 1rem 0.85rem 2.8rem', borderRadius: '16px', border: '1.5px solid hsl(var(--primary) / 0.1)', backgroundColor: 'hsl(var(--secondary) / 0.2)', fontSize: '0.95rem', fontWeight: '700', outline: 'none' }} 
+                                    />
                                 </div>
                                 {isCustomerListOpen && (
                                     <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 110, marginTop: '0.5rem', backgroundColor: 'white', borderRadius: '18px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)', border: '1px solid hsl(var(--border) / 0.6)', maxHeight: '200px', overflowY: 'auto' }}>
@@ -430,7 +480,7 @@ export default function QuotationPOS() {
                     <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: 'hsl(var(--primary))', color: 'white', padding: '4px 12px', borderRadius: '99px' }}>{cart.length} PRODUCTOS</span>
                 </div>
 
-                <Cart items={cart} onRemove={removeFromCart} onUpdateQuantity={updateQuantity} currencySymbol={currencySymbol} />
+                <Cart items={cart} onRemove={removeFromCart} onUpdateQuantity={updateQuantity} onSetQuantity={setQuantity} onSetPrice={setPrice} currencySymbol={currencySymbol} />
 
                 <div style={{ padding: '1.5rem 2rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderTop: '2px dashed hsl(var(--border) / 0.4)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -444,6 +494,46 @@ export default function QuotationPOS() {
                     </div>
                 </div>
             </div>
+            {isCustomerModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+                    <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '400px', padding: '2rem', borderRadius: '28px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: '900', margin: 0 }}>Registrar Cliente</h2>
+                            <button onClick={() => setIsCustomerModalOpen(false)} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}><X size={20} /></button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div>
+                                <label style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.4, marginBottom: '0.4rem', display: 'block' }}>Nombre Completo</label>
+                                <input 
+                                    type="text" 
+                                    value={quickCustomerData.name} 
+                                    onChange={(e) => setQuickCustomerData({...quickCustomerData, name: e.target.value})} 
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: 'none', backgroundColor: 'hsl(var(--secondary) / 0.2)', fontWeight: '700' }} 
+                                />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.4, marginBottom: '0.4rem', display: 'block' }}>CI / NIT</label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Número de identificación" 
+                                    value={quickCustomerData.tax_id} 
+                                    onChange={(e) => setQuickCustomerData({...quickCustomerData, tax_id: e.target.value})} 
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveCustomer(quickCustomerData) }}
+                                    style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '12px', border: 'none', backgroundColor: 'hsl(var(--secondary) / 0.2)', fontWeight: '700' }} 
+                                />
+                            </div>
+                            <button 
+                                className="btn btn-primary" 
+                                onClick={() => handleSaveCustomer(quickCustomerData)} 
+                                disabled={isSavingCustomer || !quickCustomerData.name} 
+                                style={{ padding: '1rem', borderRadius: '14px', fontWeight: '900', marginTop: '0.5rem' }}
+                            >
+                                {isSavingCustomer ? <RefreshCw className="animate-spin" /> : 'GUARDAR Y SELECCIONAR'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

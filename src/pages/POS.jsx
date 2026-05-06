@@ -157,6 +157,15 @@ export default function POS() {
         }))
     }
 
+    const setPrice = (productId, newPrice) => {
+        setCart(prev => prev.map(item => {
+            if (item.id === productId) {
+                return { ...item, price: Math.max(0, newPrice) }
+            }
+            return item
+        }))
+    }
+
     const handleCheckout = async (checkoutData) => {
         try {
             if (!selectedBranchId || selectedBranchId === 'all') return alert('Seleccione una sucursal específica para vender.')
@@ -183,12 +192,13 @@ export default function POS() {
                 p_branch_id: branchIdNum,
                 p_customer_id: customerIdNum,
                 p_is_credit: checkoutData?.isCredit || false,
-                p_user_id: user?.id || null
+                p_user_id: String(checkoutData?.sellerId || user?.id || ""),
+                p_notes: checkoutData?.notes || ''
             }
 
             console.log('Registrando venta con parámetros:', rpcArgs)
 
-            const { data: sale, error: saleError } = await supabase.rpc('register_sale_v2', rpcArgs)
+            const { data: sale, error: saleError } = await supabase.rpc('register_sale_v3', rpcArgs)
             if (saleError) throw saleError
 
             // ELIMINADO: La actualización manual del saldo del cliente.
@@ -245,34 +255,57 @@ export default function POS() {
             )}
 
             {showTicket && lastSale && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '2rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', alignItems: 'center', maxWidth: '850px', width: '95%', maxHeight: '90vh' }}>
-                        <div style={{ textAlign: 'center', color: 'white' }}>
-                            <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', color: '#4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', border: '1px solid rgba(255,255,255,0.2)' }}><CheckCircle size={32} /></div>
-                            <h2 style={{ fontSize: '1.75rem', fontWeight: '900', marginBottom: '0.25rem' }}>¡Venta Exitosa!</h2>
-                            <p style={{ opacity: 0.8, fontSize: '0.95rem' }}>El comprobante está listo para ser impreso.</p>
-                        </div>
-
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(15px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', maxWidth: '700px', width: '100%', animation: 'zoomIn 0.3s ease-out' }}>
+                        
                         <div style={{ 
                             backgroundColor: 'white', 
-                            padding: 0, 
-                            borderRadius: '24px', 
-                            overflow: 'auto', 
+                            borderRadius: '28px', 
+                            overflow: 'hidden', 
                             width: '100%', 
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-                            maxHeight: '60vh',
+                            boxShadow: '0 30px 60px -12px rgba(0, 0, 0, 0.6)',
+                            maxHeight: '70vh',
                             display: 'flex',
-                            justifyContent: 'center',
-                            border: '1px solid rgba(255,255,255,0.1)'
+                            flexDirection: 'column',
+                            border: '1px solid rgba(255,255,255,0.2)'
                         }}>
-                            <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center', padding: '20px 0' }}>
-                                <Ticket ref={ticketRef} {...lastSale} />
+                            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9f9f9' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#142 76% 36%' }}>
+                                    <CheckCircle size={20} color="#22c55e" />
+                                    <span style={{ fontWeight: '800', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Venta Exitosa</span>
+                                </div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '700', opacity: 0.5 }}>Comprobante #{lastSale.sale?.sale_number || '---'}</span>
+                            </div>
+
+                            <div style={{ overflowY: 'auto', padding: '1.5rem', display: 'flex', justifyContent: 'center', backgroundColor: '#f1f1f1' }}>
+                                <div style={{ transform: 'scale(0.8)', transformOrigin: 'top center', width: '100%', display: 'flex', justifyContent: 'center' }}>
+                                    <Ticket ref={ticketRef} {...lastSale} />
+                                </div>
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '1.5rem', width: '100%', maxWidth: '500px' }}>
-                            <button className="btn" style={{ flex: 1, padding: '1rem', borderRadius: '18px', backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', fontWeight: '800' }} onClick={() => setShowTicket(false)}><X size={20} /> Cerrar</button>
-                            <button className="btn btn-primary" style={{ flex: 1, padding: '1rem', borderRadius: '18px', fontWeight: '900', boxShadow: '0 15px 30px -5px rgb(var(--primary) / 0.4)' }} onClick={handlePrint}><Printer size={20} /> Imprimir Comprobante</button>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '0.75rem', width: '100%' }}>
+                            <button 
+                                className="btn-hover" 
+                                style={{ padding: '0.85rem', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer' }} 
+                                onClick={() => setShowTicket(false)}
+                            >
+                                CERRAR
+                            </button>
+                            <button 
+                                className="btn-hover" 
+                                style={{ padding: '0.85rem', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} 
+                                onClick={handlePrint}
+                            >
+                                <Printer size={18} /> PDF
+                            </button>
+                            <button 
+                                className="btn btn-primary" 
+                                style={{ padding: '0.85rem', borderRadius: '16px', fontWeight: '900', fontSize: '0.9rem', boxShadow: '0 10px 20px -5px rgb(var(--primary) / 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} 
+                                onClick={handlePrint}
+                            >
+                                <Printer size={20} /> IMPRIMIR
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -473,6 +506,7 @@ export default function POS() {
                         onRemove={removeFromCart}
                         onUpdateQuantity={updateQuantity}
                         onSetQuantity={setQuantity}
+                        onSetPrice={setPrice}
                         currencySymbol={currencySymbol}
                     />
                 </div>

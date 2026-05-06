@@ -122,7 +122,7 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
     }
 
     const removeFromCart = (id) => setCart(prev => prev.filter(i => String(i.id || i.product_id) !== String(id)))
-    const updateQuantity = (id, delta) => setCart(prev => prev.map(i => String(i.id || i.product_id) === String(id) ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i))
+    const updateQuantity = (id, delta, newPrice = null) => setCart(prev => prev.map(i => String(i.id || i.product_id) === String(id) ? { ...i, quantity: Math.max(1, i.quantity + delta), price: newPrice !== null ? newPrice : i.price } : i))
 
     useEffect(() => {
         const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
@@ -134,7 +134,7 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
 
     const handleSave = () => {
         if (cart.length === 0) return alert('Agregue al menos un producto')
-        onSave({ ...formData, branch_id: branchId, items: cart })
+        onSave({ ...formData, branch_id: branchId }, cart)
     }
 
     if (loading && !quotation) {
@@ -149,10 +149,10 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
 
     return (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
-            <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '1200px', maxHeight: '95vh', padding: 0, borderRadius: '28px', overflow: 'hidden', display: 'flex', flexDirection: 'column', backgroundColor: 'hsl(var(--background))' }}>
+            <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '1200px', maxHeight: '98vh', padding: 0, borderRadius: '28px', overflow: 'hidden', display: 'flex', flexDirection: 'column', backgroundColor: 'hsl(var(--background))' }}>
                 
                 {/* Header */}
-                <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid hsl(var(--border) / 0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.08)', flexShrink: 0 }}>
+                <div style={{ padding: '0.75rem 2rem', borderBottom: '1px solid hsl(var(--border) / 0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.08)', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <div style={{ padding: '0.6rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '14px' }}><ClipboardList size={24} /></div>
                         <div>
@@ -163,7 +163,7 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
                     <button onClick={onClose} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }} disabled={isSaving}><X size={22} /></button>
                 </div>
 
-                <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '1.25rem' }}>
                         <div style={{ position: 'relative' }}>
@@ -203,37 +203,48 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead style={{ backgroundColor: 'hsl(var(--secondary) / 0.15)' }}>
                                 <tr>
-                                    <th style={{ padding: '1rem 1.5rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Producto</th>
-                                    <th style={{ padding: '1rem 1.5rem', textAlign: 'center', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Cant.</th>
-                                    <th style={{ padding: '1rem 1.5rem', textAlign: 'right', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Precio</th>
-                                    <th style={{ padding: '1rem 1.5rem', textAlign: 'right', fontSize: '0.7rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Subtotal</th>
-                                    <th style={{ padding: '1rem 1.5rem', width: '50px' }}></th>
+                                    <th style={{ padding: '0.4rem 1.5rem', textAlign: 'left', fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Producto</th>
+                                    <th style={{ padding: '0.4rem 1.5rem', textAlign: 'center', fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Cant.</th>
+                                    <th style={{ padding: '0.4rem 1.5rem', textAlign: 'right', fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Precio</th>
+                                    <th style={{ padding: '0.4rem 1.5rem', textAlign: 'right', fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5 }}>Subtotal</th>
+                                    <th style={{ padding: '0.4rem 1.5rem', width: '50px' }}></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {cart.length > 0 ? cart.map(item => (
                                     <tr key={item.id} style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)' }}>
-                                        <td style={{ padding: '1rem 1.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                                <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                                    {item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={20} style={{ opacity: 0.2 }} />}
+                                        <td style={{ padding: '0.2rem 1.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                                <div style={{ width: '30px', height: '30px', borderRadius: '8px', backgroundColor: 'hsl(var(--secondary) / 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                                    {item.image_url ? <img src={item.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Package size={16} style={{ opacity: 0.2 }} />}
                                                 </div>
                                                 <div>
-                                                    <p style={{ margin: 0, fontWeight: '800', fontSize: '0.9rem' }}>{item.name}</p>
-                                                    <p style={{ margin: 0, fontSize: '0.7rem', opacity: 0.4 }}>SKU: {item.sku || 'N/A'}</p>
+                                                    <p style={{ margin: 0, fontWeight: '800', fontSize: '0.85rem', lineHeight: 1 }}>{item.name}</p>
+                                                    <p style={{ margin: 0, fontSize: '0.65rem', opacity: 0.4 }}>SKU: {item.sku || 'N/A'}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem 1.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', padding: '0.4rem', borderRadius: '12px', width: 'fit-content', margin: '0 auto' }}>
-                                                <button onClick={() => updateQuantity(item.id, -1)} style={{ padding: '0.2rem', borderRadius: '6px', border: 'none', backgroundColor: 'white' }}><Minus size={14} /></button>
-                                                <span style={{ fontWeight: '900', minWidth: '25px', textAlign: 'center' }}>{item.quantity}</span>
-                                                <button onClick={() => updateQuantity(item.id, 1)} style={{ padding: '0.2rem', borderRadius: '6px', border: 'none', backgroundColor: 'white' }}><Plus size={14} /></button>
+                                        <td style={{ padding: '0.4rem 1.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', padding: '0.25rem', borderRadius: '10px', width: 'fit-content', margin: '0 auto' }}>
+                                                <button onClick={() => updateQuantity(item.id, -1)} style={{ padding: '0.15rem', borderRadius: '4px', border: 'none', backgroundColor: 'white' }}><Minus size={12} /></button>
+                                                <span style={{ fontWeight: '900', minWidth: '20px', textAlign: 'center', fontSize: '0.85rem' }}>{item.quantity}</span>
+                                                <button onClick={() => updateQuantity(item.id, 1)} style={{ padding: '0.15rem', borderRadius: '4px', border: 'none', backgroundColor: 'white' }}><Plus size={12} /></button>
                                             </div>
                                         </td>
-                                        <td style={{ padding: '1rem 1.5rem', textAlign: 'right', fontWeight: '800' }}>{currencySymbol}{Number(item.price).toFixed(2)}</td>
-                                        <td style={{ padding: '1rem 1.5rem', textAlign: 'right', fontWeight: '900', color: 'hsl(var(--primary))' }}>{currencySymbol}{(Number(item.price) * item.quantity).toFixed(2)}</td>
-                                        <td style={{ padding: '1rem 1.5rem' }}>
+                                        <td style={{ padding: '0.4rem 1.5rem', textAlign: 'right' }}>
+                                            <div style={{ position: 'relative', width: '100px', marginLeft: 'auto' }}>
+                                                <span style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', opacity: 0.3, fontSize: '0.8rem' }}>{currencySymbol}</span>
+                                                <input 
+                                                    type="number" 
+                                                    step="0.01" 
+                                                    style={{ width: '100%', padding: '0.2rem 0.5rem 0.2rem 1.5rem', fontSize: '0.9rem', fontWeight: '900', color: 'hsl(var(--primary))', backgroundColor: 'hsl(var(--secondary) / 0.1)', border: '1px solid hsl(var(--border) / 0.3)', borderRadius: '10px', outline: 'none', textAlign: 'right' }} 
+                                                    value={item.price} 
+                                                    onChange={(e) => updateQuantity(item.id, 0, parseFloat(e.target.value) || 0)} 
+                                                />
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '0.2rem 1.5rem', textAlign: 'right', fontWeight: '900', color: 'hsl(var(--primary))', fontSize: '0.9rem' }}>{currencySymbol}{(Number(item.price) * item.quantity).toFixed(2)}</td>
+                                        <td style={{ padding: '0.2rem 1.5rem' }}>
                                             <button onClick={() => removeFromCart(item.id)} style={{ color: 'hsl(var(--destructive))', border: 'none', background: 'none' }}><Trash2 size={18} /></button>
                                         </td>
                                     </tr>
@@ -318,13 +329,13 @@ export default function QuotationModal({ quotation, onClose, onSave, isSaving, c
                                     </div>
                                 )}
 
-                                <ProductGrid searchTerm={searchTerm} branchId={branchId} brandId={selectedBrandId} modelId={selectedModelId} onAddToCart={addToCart} currencySymbol={currencySymbol} viewMode="grid" stockFilter="in-stock" />
+                                <ProductGrid searchTerm={searchTerm} branchId={branchId} brandId={selectedBrandId} modelId={selectedModelId} onAddToCart={addToCart} currencySymbol={currencySymbol} viewMode="list" stockFilter="in-stock" excludeIds={cart.map(item => item.id || item.product_id)} />
                             </div>
                         )}
                     </div>
                 </div>
 
-                <div style={{ padding: '1.5rem 2rem', borderTop: '1px solid hsl(var(--border) / 0.5)', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                <div style={{ padding: '0.75rem 2rem', borderTop: '1px solid hsl(var(--border) / 0.5)', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
                     <button onClick={onClose} className="btn" style={{ padding: '0.85rem 2rem', borderRadius: '16px' }}>Cancelar</button>
                     <button onClick={handleSave} className="btn btn-primary" style={{ padding: '0.85rem 3rem', borderRadius: '16px', fontWeight: '900' }} disabled={isSaving}>
                         {isSaving ? <Loader2 className="animate-spin" /> : 'Guardar Cotización'}

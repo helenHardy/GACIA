@@ -221,7 +221,7 @@ export default function Inventory() {
                     branch_id: s.branch_id,
                     stock: s.stock,
                     min_stock: s.min_stock,
-                    price: s.price || null
+                    price: productData.price || 0 // Usar precio global para todas las sucursales
                 }))
 
                 const { error: settingsError } = await supabase

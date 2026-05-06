@@ -259,7 +259,7 @@ export default function Classifications() {
                     branch_id: s.branch_id,
                     stock: s.stock || 0,
                     min_stock: s.min_stock || 0,
-                    price: s.price || null
+                    price: productData.price || 0 // Usar precio global para todas las sucursales
                 }))
 
                 const { error: settingsError } = await supabase
@@ -424,15 +424,16 @@ export default function Classifications() {
                                 <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Imagen</th>
                                 <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Modelo</th>
                                 <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>SKU / Código</th>
+                                <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Precio</th>
                                 <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, textAlign: 'right' }}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loading && modelProducts.length === 0 ? (
-                                <tr><td colSpan="4" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>Cargando modelos...</td></tr>
+                                <tr><td colSpan="5" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>Cargando modelos...</td></tr>
                             ) : modelProducts.length === 0 ? (
                                 <tr>
-                                    <td colSpan="4" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>
+                                    <td colSpan="5" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>
                                         <Package size={48} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
                                         <p>No hay modelos registrados para este producto</p>
                                     </td>
@@ -454,6 +455,11 @@ export default function Classifications() {
                                         </td>
                                         <td style={{ padding: '1rem' }}>
                                             <div style={{ fontSize: '0.85rem', opacity: 0.6 }}>{product.sku || 'N/A'}</div>
+                                        </td>
+                                        <td style={{ padding: '1rem' }}>
+                                            <div style={{ fontWeight: '800', color: 'hsl(var(--primary))', fontSize: '0.95rem' }}>
+                                                Bs.{(product.price || 0).toFixed(2)}
+                                            </div>
                                         </td>
                                         <td style={{ padding: '1rem', textAlign: 'right' }}>
                                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>

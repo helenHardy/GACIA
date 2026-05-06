@@ -1,3 +1,11 @@
+-- Asegurar que la columna 'notes' exista en la tabla 'sales'
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sales' AND column_name = 'notes') THEN
+        ALTER TABLE public.sales ADD COLUMN notes text;
+    END IF;
+END $$;
+
 CREATE OR REPLACE FUNCTION public.register_sale_v2(
   p_items JSONB,              -- Array of items: [{product_id, quantity, price}, ...]
   p_subtotal NUMERIC,
@@ -10,7 +18,8 @@ CREATE OR REPLACE FUNCTION public.register_sale_v2(
   p_branch_id BIGINT,
   p_customer_id BIGINT,
   p_is_credit BOOLEAN,
-  p_user_id UUID
+  p_user_id UUID,
+  p_notes TEXT DEFAULT ''
 ) RETURNS JSONB AS $$
 DECLARE
   v_sale_id UUID;
@@ -29,7 +38,8 @@ BEGIN
     branch_id, 
     customer_id, 
     is_credit, 
-    user_id
+    user_id,
+    notes
   )
   VALUES (
     p_subtotal, 
@@ -42,15 +52,12 @@ BEGIN
     p_branch_id::BIGINT, 
     p_customer_id::BIGINT, 
     p_is_credit, 
-    p_user_id::UUID
+    p_user_id::UUID,
+    p_notes
   )
   RETURNING id INTO v_sale_id;
 
   -- 2. Insert Sale Items
-  -- Note: existing trigger trg_kardex_sale_insert_update on sale_items will:
-  -- a. Validate stock
-  -- b. Subtract stock
-  -- c. Register in Kardex
   FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id BIGINT, quantity NUMERIC, price NUMERIC)
   LOOP
     INSERT INTO public.sale_items (

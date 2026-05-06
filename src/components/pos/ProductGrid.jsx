@@ -291,7 +291,12 @@ export default function ProductGrid({ searchTerm, branchId, brandId, modelId, on
                             <div
                                 key={product.id}
                                 className="card"
-                                onClick={() => product.stock > 0 && onAddToCart(product)}
+                                onClick={(e) => {
+                                    // Evitar que se agregue el producto si se hace clic específicamente en los controles de cantidad
+                                    if (product.stock > 0 && !e.target.closest('.qty-controls')) {
+                                        onAddToCart(product, 1);
+                                    }
+                                }}
                                 style={{
                                     padding: '0.5rem 1rem',
                                     display: 'flex',
@@ -377,7 +382,11 @@ export default function ProductGrid({ searchTerm, branchId, brandId, modelId, on
                                     </div>
 
                                     {/* Local Quantity Selector for Catalog */}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary) / 0.2)', padding: '0.3rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.4)' }}>
+                                    <div 
+                                        className="qty-controls"
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary) / 0.2)', padding: '0.3rem', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.4)' }}
+                                    >
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -401,8 +410,17 @@ export default function ProductGrid({ searchTerm, branchId, brandId, modelId, on
                                                     setRowQuantities(prev => ({ ...prev, [product.id]: 1 }));
                                                 }
                                             }}
-                                            onClick={(e) => e.stopPropagation()}
-                                            style={{ width: '40px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: '900', fontSize: '0.9rem', outline: 'none' }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const qty = rowQuantities[product.id] || 1;
+                                                    onAddToCart(product, qty);
+                                                    // Reiniciar cantidad local después de agregar
+                                                    setRowQuantities(prev => ({ ...prev, [product.id]: 1 }));
+                                                }
+                                            }}
+                                            style={{ width: '110px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: '900', fontSize: '1rem', outline: 'none' }}
                                         />
                                         <button
                                             onClick={(e) => {

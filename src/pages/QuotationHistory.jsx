@@ -20,7 +20,8 @@ import {
     Clock,
     User,
     X,
-    Download
+    Download,
+    Edit2
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import QuotationModal from '../components/pos/QuotationModal'
@@ -496,9 +497,6 @@ export default function QuotationHistory() {
                     <button className="btn" onClick={fetchQuotations} disabled={loading} style={{ padding: '0.75rem', borderRadius: '14px', backgroundColor: 'hsl(var(--secondary) / 0.5)' }}>
                         <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button className="btn btn-primary shadow-lg shadow-primary/20" onClick={() => { setEditingQuotation(null); setIsModalOpen(true); }} style={{ padding: '0.75rem 1.5rem', borderRadius: '14px', fontWeight: '800', gap: '0.5rem' }}>
-                        <Plus size={20} /> NUEVA COTIZACIÓN
-                    </button>
                 </div>
             </div>
 
@@ -665,8 +663,9 @@ export default function QuotationHistory() {
                                                 <button onClick={() => handleConvert(q)} className="btn btn-primary" style={{ padding: '0.5rem', borderRadius: '10px' }} title="Convertir a Venta"><ShoppingCart size={18} /></button>
                                             )}
                                             <button onClick={() => handlePrint(q)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)' }} title="Imprimir"><Printer size={18} /></button>
+                                            <button onClick={() => handlePrint(q)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: '#ef4444' }} title="Ver PDF"><FileText size={18} /></button>
                                             {q.status === 'Pendiente' && (
-                                                <button onClick={() => { setEditingQuotation(q); setIsModalOpen(true); }} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Editar"><Eye size={18} /></button>
+                                                <button onClick={() => { setEditingQuotation(q); setIsModalOpen(true); }} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Modificar"><Edit2 size={18} /></button>
                                             )}
                                             {q.status === 'Pendiente' && (
                                                 <button onClick={() => handleVoid(q.id)} className="btn" style={{ padding: '0.5rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }} title="Anular"><X size={18} /></button>

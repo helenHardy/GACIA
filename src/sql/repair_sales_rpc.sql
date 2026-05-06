@@ -15,11 +15,18 @@ BEGIN
 
     RAISE NOTICE 'Tipo detectado para sales.id: %', v_id_type;
 
+    -- 1.5. Asegurar columna notes
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sales' AND column_name = 'notes') THEN
+        ALTER TABLE public.sales ADD COLUMN notes text;
+    END IF;
+
     -- 2. Eliminar funciones anteriores para evitar conflictos de sobrecarga
     DROP FUNCTION IF EXISTS public.register_sale_v2(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, bigint, bigint, boolean, uuid);
+    DROP FUNCTION IF EXISTS public.register_sale_v2(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, bigint, bigint, boolean, uuid, text);
     
     -- También intentamos borrar cualquier versión que use UUID para branch_id por si acaso
     EXECUTE 'DROP FUNCTION IF EXISTS public.register_sale_v2(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, uuid, uuid, boolean, uuid)';
+    EXECUTE 'DROP FUNCTION IF EXISTS public.register_sale_v2(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, uuid, uuid, boolean, uuid, text)';
 
     -- 3. Crear la función adaptada al tipo real de tu base de datos
     IF v_id_type = 'uuid' THEN
@@ -36,15 +43,16 @@ BEGIN
           p_branch_id BIGINT,
           p_customer_id BIGINT,
           p_is_credit BOOLEAN,
-          p_user_id UUID
+          p_user_id UUID,
+          p_notes TEXT DEFAULT ''
         ) RETURNS JSONB AS $body$
         DECLARE
           v_sale_id UUID;
           v_item RECORD;
           v_sale_record JSONB;
         BEGIN
-          INSERT INTO public.sales (subtotal, tax, total, discount, payment_method, amount_received, amount_change, branch_id, customer_id, is_credit, user_id)
-          VALUES (p_subtotal, p_tax, p_total, p_discount, p_payment_method, p_amount_received, p_amount_change, p_branch_id, p_customer_id, p_is_credit, p_user_id)
+          INSERT INTO public.sales (subtotal, tax, total, discount, payment_method, amount_received, amount_change, branch_id, customer_id, is_credit, user_id, notes)
+          VALUES (p_subtotal, p_tax, p_total, p_discount, p_payment_method, p_amount_received, p_amount_change, p_branch_id, p_customer_id, p_is_credit, p_user_id, p_notes)
           RETURNING id INTO v_sale_id;
 
           FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id BIGINT, quantity NUMERIC, price NUMERIC)
@@ -71,15 +79,16 @@ BEGIN
           p_branch_id BIGINT,
           p_customer_id BIGINT,
           p_is_credit BOOLEAN,
-          p_user_id UUID
+          p_user_id UUID,
+          p_notes TEXT DEFAULT ''
         ) RETURNS JSONB AS $body$
         DECLARE
           v_sale_id BIGINT;
           v_item RECORD;
           v_sale_record JSONB;
         BEGIN
-          INSERT INTO public.sales (subtotal, tax, total, discount, payment_method, amount_received, amount_change, branch_id, customer_id, is_credit, user_id)
-          VALUES (p_subtotal, p_tax, p_total, p_discount, p_payment_method, p_amount_received, p_amount_change, p_branch_id, p_customer_id, p_is_credit, p_user_id)
+          INSERT INTO public.sales (subtotal, tax, total, discount, payment_method, amount_received, amount_change, branch_id, customer_id, is_credit, user_id, notes)
+          VALUES (p_subtotal, p_tax, p_total, p_discount, p_payment_method, p_amount_received, p_amount_change, p_branch_id, p_customer_id, p_is_credit, p_user_id, p_notes)
           RETURNING id INTO v_sale_id;
 
           FOR v_item IN SELECT * FROM jsonb_to_recordset(p_items) AS x(product_id BIGINT, quantity NUMERIC, price NUMERIC)

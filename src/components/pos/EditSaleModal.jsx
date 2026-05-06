@@ -89,7 +89,7 @@ export default function EditSaleModal({ sale, onClose, onSave, isSaving, currenc
     }
     const removeFromCart = (pid) => setCart(prev => prev.filter(i => String(i.id) !== String(pid)))
     const updateQuantity = (pid, delta) => setCart(prev => prev.map(i => String(i.id) === String(pid) ? { ...i, quantity: Math.max(1, i.quantity + delta) } : i))
-    const setQuantity = (pid, val) => setCart(prev => prev.map(i => String(i.id) === String(pid) ? { ...i, quantity: Math.max(0, val) } : i))
+    const setQuantity = (pid, val, newPrice = null) => setCart(prev => prev.map(i => String(i.id) === String(pid) ? { ...i, quantity: Math.max(0, val), price: newPrice !== null ? newPrice : i.price } : i))
 
     const subtotal = cart.reduce((a, i) => a + (i.price * i.quantity), 0)
     const finalTotal = Math.max(0, subtotal + (sale?.tax || 0) - (sale?.discount || 0))
@@ -147,11 +147,21 @@ export default function EditSaleModal({ sale, onClose, onSave, isSaving, currenc
                                     <div style={{ width: '40px', height: '40px', backgroundColor: 'hsl(var(--secondary) / 0.4)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
                                         {item.image_url ? <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Box size={18} opacity={0.4} />}
                                     </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ flex: 1.5, minWidth: 0 }}>
                                         <h4 style={{ fontSize: '0.85rem', fontWeight: '800', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '0.15rem' }}>{item.name}</h4>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                            <span style={{ fontSize: '0.8rem', color: 'hsl(var(--primary))', fontWeight: '900' }}>{currencySymbol}{(item.price * item.quantity).toFixed(2)}</span>
-                                            <span style={{ fontSize: '0.65rem', opacity: 0.4, fontWeight: '700' }}>({currencySymbol}{item.price?.toFixed(2)} c/u)</span>
+                                        <p style={{ margin: 0, fontSize: '0.65rem', opacity: 0.4, fontWeight: '700' }}>SKU: {item.sku || 'N/A'}</p>
+                                    </div>
+                                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                        <p style={{ margin: 0, fontSize: '0.6rem', fontWeight: '800', opacity: 0.4, textTransform: 'uppercase' }}>Precio Unit.</p>
+                                        <div style={{ position: 'relative' }}>
+                                            <span style={{ position: 'absolute', left: '0.5rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', opacity: 0.3, fontSize: '0.75rem' }}>{currencySymbol}</span>
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                style={{ width: '100%', padding: '0.35rem 0.5rem 0.35rem 1.4rem', fontSize: '0.85rem', fontWeight: '900', color: 'hsl(var(--primary))', backgroundColor: 'hsl(var(--secondary) / 0.2)', border: '1px solid hsl(var(--border) / 0.3)', borderRadius: '10px', outline: 'none' }} 
+                                                value={item.price} 
+                                                onChange={(e) => setQuantity(item.id, item.quantity, parseFloat(e.target.value) || 0)} 
+                                            />
                                         </div>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'hsl(var(--secondary) / 0.2)', borderRadius: '12px', padding: '0.35rem', border: '1px solid hsl(var(--border) / 0.4)' }}>

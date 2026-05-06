@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Banknote, QrCode, CheckCircle, RefreshCw, User, HandCoins, Search, ChevronDown, Wallet, ArrowRight, UserPlus, Info, Split, Tag } from 'lucide-react'
+import { X, Banknote, QrCode, CheckCircle, RefreshCw, User, HandCoins, Search, ChevronDown, Wallet, ArrowRight, UserPlus, Info, Split, Tag, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 export default function CheckoutModal({ total, onClose, onConfirm, isProcessing, currencySymbol = 'Bs.', initialCustomer = null }) {
@@ -15,16 +15,31 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false)
     const [newCustomerData, setNewCustomerData] = useState({ name: '', tax_id: '', email: '', phone: '' })
 
+    // Sellers state
+    const [sellers, setSellers] = useState([])
+    const [selectedSellerId, setSelectedSellerId] = useState(null)
+
     // Mixed payment states
     const [amountCash, setAmountCash] = useState('')
     const [secondaryMethod, setSecondaryMethod] = useState('QR') // QR or Digital
+    const [notes, setNotes] = useState('')
 
     useEffect(() => {
-        async function fetchCustomers() {
-            const { data } = await supabase.from('customers').select('*').eq('active', true).order('name')
-            setCustomers(data || [])
+        async function fetchData() {
+            const [customersRes, sellersRes, userRes] = await Promise.all([
+                supabase.from('customers').select('*').eq('active', true).order('name'),
+                supabase.from('profiles').select('id, full_name, role').in('role', ['Administrador', 'Cajero', 'Vendedor']),
+                supabase.auth.getUser()
+            ])
+            
+            setCustomers(customersRes.data || [])
+            setSellers(sellersRes.data || [])
+            
+            if (userRes.data?.user) {
+                setSelectedSellerId(userRes.data.user.id)
+            }
         }
-        fetchCustomers()
+        fetchData()
     }, [])
 
     const filteredCustomers = customers.filter(c =>
@@ -62,7 +77,9 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
             discount: discountVal,
             customerId: selectedCustomer?.id || null,
             customer: selectedCustomer,
-            isCredit: paymentMethod === 'Crédito'
+            sellerId: selectedSellerId,
+            isCredit: paymentMethod === 'Crédito',
+            notes: notes
         })
     }
 
@@ -107,39 +124,10 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
     }
 
     return (
-        <div style={{
-            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem'
-        }}>
-            <div className="card shadow-2xl" style={{
-                width: '100%',
-                maxWidth: '1100px',
-                padding: 0,
-                borderRadius: '24px',
-                overflow: 'hidden',
-                backgroundColor: 'hsl(var(--background))'
-            }}>
-                {/* Modal Header */}
-                <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid hsl(var(--border) / 0.5)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}>
-                            <Wallet size={20} />
-                        </div>
-                        <div>
-                            <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>Finalizar Transacción</h2>
-                        </div>
-                    </div>
-                    {!isProcessing && (
-                        <button onClick={onClose} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}>
-                            <X size={20} />
-                        </button>
-                    )}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(400px, 450px) 1fr', gap: '1px', backgroundColor: 'hsl(var(--border) / 0.3)' }}>
-
-                    {/* Left Column: Totals and Methods */}
-                    <div style={{ padding: '2rem', backgroundColor: 'hsl(var(--background))', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '2rem' }}>
+            <div className="card shadow-2xl animate-in zoom-in-95 duration-200" style={{ backgroundColor: 'white', padding: 0, borderRadius: '32px', maxWidth: '1150px', width: '100%', maxHeight: '92vh', overflow: 'hidden', display: 'flex', border: 'none' }}>
+                {/* Left Panel - Summary & Methods */}
+                <div style={{ flex: '1 1 40%', padding: '2rem', borderRight: '1px solid hsl(var(--border) / 0.4)', backgroundColor: 'hsl(var(--secondary) / 0.05)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
                         {/* Total Display */}
                         <div style={{
@@ -228,166 +216,228 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                         </div>
                     </div>
 
-                    {/* Right Column: Interaction */}
-                    <div style={{ padding: '2rem', backgroundColor: 'hsl(var(--background))', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                {/* Right Panel - Customer & Confirmation */}
+                <div style={{ flex: '1 1 60%', padding: '2rem', backgroundColor: 'hsl(var(--background))', display: 'flex', flexDirection: 'column', gap: '1.25rem', position: 'relative' }}>
 
-                        {/* Cliente Selector */}
-                        <div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, marginBottom: '0.75rem' }}>
-                                <User size={12} /> Cliente para la Factura
-                            </label>
-                            <div style={{ position: 'relative' }}>
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button
-                                        type="button"
-                                        style={{
-                                            flex: 1,
-                                            padding: '0.75rem 1rem',
-                                            backgroundColor: 'hsl(var(--secondary) / 0.3)',
-                                            border: '1px solid hsl(var(--border) / 0.5)',
-                                            borderRadius: '14px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.75rem',
-                                            cursor: 'pointer',
-                                            textAlign: 'left'
-                                        }}
-                                        onClick={() => { setShowCustomerList(!showCustomerList); setIsCreatingCustomer(false); }}
-                                        disabled={isProcessing}
-                                    >
-                                        <div style={{ padding: '0.4rem', backgroundColor: 'hsl(var(--background))', borderRadius: '8px', color: 'hsl(var(--primary))' }}>
-                                            <User size={16} />
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            <p style={{ fontSize: '0.85rem', fontWeight: '700', margin: 0 }}>{selectedCustomer ? selectedCustomer.name : 'Cliente General (Contado)'}</p>
-                                            {selectedCustomer && (
-                                                <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: selectedCustomer.current_balance > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
-                                                    Saldo: {currencySymbol}{parseFloat(selectedCustomer.current_balance || 0).toFixed(2)} 
-                                                    {selectedCustomer.current_balance > 0 ? ' (Deuda)' : ' (Al día)'}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <ChevronDown size={18} opacity={0.3} />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={startCreateCustomer}
-                                        disabled={isProcessing}
-                                        style={{
-                                            padding: '0 1rem',
-                                            backgroundColor: 'hsl(var(--primary) / 0.1)',
-                                            border: '1px solid hsl(var(--primary) / 0.2)',
-                                            borderRadius: '14px',
-                                            color: 'hsl(var(--primary))',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '0.5rem'
-                                        }}
-                                    >
-                                        <UserPlus size={18} />
-                                        <span style={{ fontSize: '0.7rem', fontWeight: '800' }}>NUEVO</span>
-                                    </button>
-                                </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
+                            {/* Seller Selector */}
+                            <div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, marginBottom: '0.5rem' }}>
+                                    <User size={12} /> Cajero / Vendedor
+                                </label>
+                                <select
+                                    value={selectedSellerId || ''}
+                                    onChange={(e) => setSelectedSellerId(e.target.value)}
+                                    disabled={isProcessing}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem 1rem',
+                                        backgroundColor: 'hsl(var(--secondary) / 0.3)',
+                                        border: '1px solid hsl(var(--border) / 0.5)',
+                                        borderRadius: '14px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: '700',
+                                        outline: 'none',
+                                        cursor: 'pointer'
+                                    }}
+                                >
+                                    <option value="">Seleccionar Vendedor</option>
+                                    {sellers.map(s => (
+                                        <option key={s.id} value={s.id}>{s.full_name || 'Sin Nombre'} ({s.role})</option>
+                                    ))}
+                                </select>
+                            </div>
 
-                                {showCustomerList && (
-                                    <div className="card shadow-2xl" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', zIndex: 110, marginTop: '0.5rem', padding: 0, overflow: 'hidden', borderRadius: '16px', border: '1px solid hsl(var(--border) / 0.6)' }}>
-                                        {!isCreatingCustomer ? (
-                                            <>
-                                                <div style={{ padding: '0.75rem', borderBottom: '1px solid hsl(var(--border) / 0.2)', backgroundColor: 'hsl(var(--secondary) / 0.1)', display: 'flex', gap: '0.5rem' }}>
-                                                    <div style={{ position: 'relative', flex: 1 }}>
-                                                        <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
-                                                        <input
-                                                            autoFocus
-                                                            placeholder="Buscar por nombre o NIT..."
-                                                            style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2.25rem', backgroundColor: 'white', borderRadius: '10px', border: '1px solid hsl(var(--primary) / 0.2)', fontSize: '0.85rem', outline: 'none' }}
-                                                            value={customerSearch}
-                                                            onChange={(e) => setCustomerSearch(e.target.value)}
-                                                        />
+                            {/* Cliente Selector */}
+                            <div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, marginBottom: '0.75rem' }}>
+                                    <User size={12} /> Cliente para la Factura
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <button
+                                            type="button"
+                                            style={{
+                                                flex: 1,
+                                                padding: '0.75rem 1rem',
+                                                backgroundColor: 'hsl(var(--secondary) / 0.3)',
+                                                border: '1px solid hsl(var(--border) / 0.5)',
+                                                borderRadius: '14px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.75rem',
+                                                cursor: 'pointer',
+                                                textAlign: 'left'
+                                            }}
+                                            onClick={() => { setShowCustomerList(!showCustomerList); setIsCreatingCustomer(false); }}
+                                            disabled={isProcessing}
+                                        >
+                                            <div style={{ padding: '0.4rem', backgroundColor: 'hsl(var(--background))', borderRadius: '8px', color: 'hsl(var(--primary))' }}>
+                                                <User size={16} />
+                                            </div>
+                                            <div style={{ flex: 1 }}>
+                                                <p style={{ fontSize: '0.85rem', fontWeight: '700', margin: 0 }}>{selectedCustomer ? selectedCustomer.name : 'Cliente General (Contado)'}</p>
+                                                {selectedCustomer && (
+                                                    <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: selectedCustomer.current_balance > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
+                                                        Saldo: {currencySymbol}{parseFloat(selectedCustomer.current_balance || 0).toFixed(2)} 
+                                                        {selectedCustomer.current_balance > 0 ? ' (Deuda)' : ' (Al día)'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <ChevronDown size={18} opacity={0.3} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={startCreateCustomer}
+                                            disabled={isProcessing}
+                                            style={{
+                                                padding: '0 1rem',
+                                                backgroundColor: 'hsl(var(--primary) / 0.1)',
+                                                border: '1px solid hsl(var(--primary) / 0.2)',
+                                                borderRadius: '14px',
+                                                color: 'hsl(var(--primary))',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem'
+                                            }}
+                                        >
+                                            <UserPlus size={18} />
+                                            <span style={{ fontSize: '0.7rem', fontWeight: '800' }}>NUEVO</span>
+                                        </button>
+                                    </div>
+
+                                    {showCustomerList && (
+                                        <div className="card shadow-2xl" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', zIndex: 110, marginTop: '0.5rem', padding: 0, overflow: 'hidden', borderRadius: '16px', border: '1px solid hsl(var(--border) / 0.6)' }}>
+                                            {!isCreatingCustomer ? (
+                                                <>
+                                                    <div style={{ padding: '0.75rem', borderBottom: '1px solid hsl(var(--border) / 0.2)', backgroundColor: 'hsl(var(--secondary) / 0.1)', display: 'flex', gap: '0.5rem' }}>
+                                                        <div style={{ position: 'relative', flex: 1 }}>
+                                                            <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} />
+                                                            <input
+                                                                autoFocus
+                                                                placeholder="Buscar por nombre o NIT..."
+                                                                style={{ width: '100%', padding: '0.6rem 0.75rem 0.6rem 2.25rem', backgroundColor: 'white', borderRadius: '10px', border: '1px solid hsl(var(--primary) / 0.2)', fontSize: '0.85rem', outline: 'none' }}
+                                                                value={customerSearch}
+                                                                onChange={(e) => setCustomerSearch(e.target.value)}
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && filteredCustomers.length === 0 && customerSearch.trim()) {
+                                                                        startCreateCustomer();
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                    <button
-                                                        className="btn"
-                                                        style={{ width: '100%', justifyContent: 'flex-start', padding: '0.75rem 1rem', borderRadius: 0, border: 'none', borderBottom: '1px solid hsl(var(--border) / 0.2)' }}
-                                                        onClick={() => { setSelectedCustomer(null); setShowCustomerList(false); }}
-                                                    >
-                                                        <User size={16} style={{ marginRight: '0.5rem', opacity: 0.5 }} />
-                                                        <span style={{ fontWeight: '700', fontSize: '0.85rem' }}>Cliente General / Final</span>
-                                                    </button>
-                                                    {filteredCustomers.map(c => (
+                                                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                                         <button
-                                                            key={c.id}
                                                             className="btn"
                                                             style={{ width: '100%', justifyContent: 'flex-start', padding: '0.75rem 1rem', borderRadius: 0, border: 'none', borderBottom: '1px solid hsl(var(--border) / 0.2)' }}
-                                                            onClick={() => { setSelectedCustomer(c); setShowCustomerList(false); }}
+                                                            onClick={() => { setSelectedCustomer(null); setShowCustomerList(false); }}
                                                         >
-                                                            <div style={{ textAlign: 'left', flex: 1 }}>
-                                                                <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{c.name}</div>
-                                                                <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>NIT: {c.tax_id || '---'}</div>
-                                                            </div>
-                                                            <ArrowRight size={14} opacity={0.3} />
+                                                            <User size={16} style={{ marginRight: '0.5rem', opacity: 0.5 }} />
+                                                            <span style={{ fontWeight: '700', fontSize: '0.85rem' }}>Cliente General / Final</span>
                                                         </button>
-                                                    ))}
+                                                        {filteredCustomers.map(c => (
+                                                            <button
+                                                                key={c.id}
+                                                                className="btn"
+                                                                style={{ width: '100%', justifyContent: 'flex-start', padding: '0.75rem 1rem', borderRadius: 0, border: 'none', borderBottom: '1px solid hsl(var(--border) / 0.2)' }}
+                                                                onClick={() => { setSelectedCustomer(c); setShowCustomerList(false); }}
+                                                            >
+                                                                <div style={{ textAlign: 'left', flex: 1 }}>
+                                                                    <div style={{ fontWeight: '800', fontSize: '0.85rem' }}>{c.name}</div>
+                                                                    <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>NIT: {c.tax_id || '---'}</div>
+                                                                </div>
+                                                                <ArrowRight size={14} opacity={0.3} />
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800' }}>Nuevo Cliente</h4>
+                                                        <button onClick={() => setIsCreatingCustomer(false)} className="btn" style={{ padding: '0.3rem', borderRadius: '50%' }}><X size={14} /></button>
+                                                    </div>
+                                                    <div style={{ display: 'grid', gap: '0.75rem' }}>
+                                                        <input
+                                                            placeholder="Nombre *"
+                                                            value={newCustomerData.name}
+                                                            onChange={e => setNewCustomerData({ ...newCustomerData, name: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '0.85rem' }}
+                                                            autoFocus
+                                                        />
+                                                        <input
+                                                            placeholder="NIT / CI"
+                                                            value={newCustomerData.tax_id}
+                                                            onChange={e => setNewCustomerData({ ...newCustomerData, tax_id: e.target.value })}
+                                                            style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '0.85rem' }}
+                                                        />
+                                                        <button
+                                                            className="btn btn-primary"
+                                                            onClick={handleCreateCustomer}
+                                                            style={{ padding: '0.6rem', fontWeight: '800', fontSize: '0.85rem' }}
+                                                        >
+                                                            Guardar
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </>
-                                        ) : (
-                                            <div style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.1)' }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                                    <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '800' }}>Nuevo Cliente</h4>
-                                                    <button onClick={() => setIsCreatingCustomer(false)} className="btn" style={{ padding: '0.3rem', borderRadius: '50%' }}><X size={14} /></button>
-                                                </div>
-                                                <div style={{ display: 'grid', gap: '0.75rem' }}>
-                                                    <input
-                                                        placeholder="Nombre *"
-                                                        value={newCustomerData.name}
-                                                        onChange={e => setNewCustomerData({ ...newCustomerData, name: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '0.85rem' }}
-                                                        autoFocus
-                                                    />
-                                                    <input
-                                                        placeholder="NIT / CI"
-                                                        value={newCustomerData.tax_id}
-                                                        onChange={e => setNewCustomerData({ ...newCustomerData, tax_id: e.target.value })}
-                                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '0.85rem' }}
-                                                    />
-                                                    <button
-                                                        className="btn btn-primary"
-                                                        onClick={handleCreateCustomer}
-                                                        style={{ padding: '0.6rem', fontWeight: '800', fontSize: '0.85rem' }}
-                                                    >
-                                                        Guardar
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
+                        </div>
+
+                        {/* Notas Field */}
+                        <div>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, marginBottom: '0.5rem' }}>
+                                <ClipboardList size={12} /> Notas / Observaciones
+                            </label>
+                            <textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                disabled={isProcessing}
+                                placeholder="Escribe aquí cualquier observación sobre la venta..."
+                                style={{
+                                    width: '100%',
+                                    minHeight: '45px',
+                                    padding: '0.6rem 1rem',
+                                    backgroundColor: 'hsl(var(--secondary) / 0.1)',
+                                    border: '1px solid hsl(var(--border) / 0.4)',
+                                    borderRadius: '12px',
+                                    fontSize: '0.85rem',
+                                    fontWeight: '600',
+                                    outline: 'none',
+                                    resize: 'none',
+                                    transition: '0.2s',
+                                    fontFamily: 'inherit'
+                                }}
+                            />
                         </div>
 
                         {/* Specific Payment Inputs */}
                         <div style={{ flex: 1 }}>
                             {paymentMethod === 'Efectivo' && (
-                                <div style={{ padding: '1.5rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.4)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                <div style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.4)', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'center' }}>
                                     <div>
-                                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '700', fontSize: '0.85rem' }}>Monto recibido</label>
+                                        <label style={{ display: 'block', fontWeight: '800', fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Monto recibido</label>
                                         <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', opacity: 0.3 }}>{currencySymbol}</span>
+                                            <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', opacity: 0.3 }}>{currencySymbol}</span>
                                             <input
                                                 type="number"
                                                 placeholder="0.00"
                                                 value={amountPaid}
                                                 onChange={(e) => setAmountPaid(e.target.value)}
                                                 disabled={isProcessing}
-                                                style={{ width: '100%', padding: '1rem 1rem 1rem 2.5rem', fontSize: '1.75rem', fontWeight: '900', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.6)', outline: 'none' }}
+                                                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.25rem', fontSize: '1.5rem', fontWeight: '900', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.6)', outline: 'none' }}
                                                 autoFocus
                                             />
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid hsl(142 76% 36% / 0.2)' }}>
-                                        <span style={{ fontWeight: '700', opacity: 0.6 }}>Cambio:</span>
-                                        <span style={{ fontSize: '1.5rem', fontWeight: '900', color: 'hsl(142 76% 36%)' }}>{currencySymbol}{change}</span>
+                                    <div style={{ padding: '0.75rem 1.25rem', backgroundColor: 'white', borderRadius: '14px', border: '1px solid hsl(142 76% 36% / 0.2)', textAlign: 'right' }}>
+                                        <span style={{ display: 'block', fontWeight: '800', fontSize: '0.7rem', opacity: 0.4, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Su Cambio</span>
+                                        <span style={{ fontSize: '1.75rem', fontWeight: '900', color: 'hsl(142 76% 36%)', letterSpacing: '-0.02em' }}>{currencySymbol}{change}</span>
                                     </div>
                                 </div>
                             )}
@@ -435,22 +485,40 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                             )}
                         </div>
 
-                        {/* Action Button */}
-                        <button
-                            onClick={handleConfirm}
-                            disabled={isProcessing || (paymentMethod === 'Crédito' && !selectedCustomer)}
-                            className="btn btn-primary shadow-xl shadow-primary/20"
-                            style={{ width: '100%', padding: '1.4rem', borderRadius: '20px', fontSize: '1.25rem', fontWeight: '900', gap: '1rem', marginTop: 'auto' }}
-                        >
-                            {isProcessing ? (
-                                <><RefreshCw size={24} className="animate-spin" /> PROCESANDO...</>
-                            ) : (
-                                <><CheckCircle size={24} /> CONFIRMAR COBRO</>
-                            )}
-                        </button>
+                        {/* Action Buttons Row */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', marginTop: 'auto' }}>
+                            <button
+                                onClick={onClose}
+                                disabled={isProcessing}
+                                className="btn-hover"
+                                style={{ 
+                                    padding: '1.25rem', 
+                                    borderRadius: '18px', 
+                                    fontSize: '1rem', 
+                                    fontWeight: '800', 
+                                    backgroundColor: 'hsl(var(--secondary) / 0.5)',
+                                    color: 'hsl(var(--secondary-foreground))',
+                                    border: 'none',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                CANCELAR
+                            </button>
+                            <button
+                                onClick={handleConfirm}
+                                disabled={isProcessing || (paymentMethod === 'Crédito' && !selectedCustomer)}
+                                className="btn btn-primary shadow-xl shadow-primary/20"
+                                style={{ padding: '1.25rem', borderRadius: '18px', fontSize: '1.1rem', fontWeight: '900', gap: '0.75rem' }}
+                            >
+                                {isProcessing ? (
+                                    <><RefreshCw size={22} className="animate-spin" /> PROCESANDO...</>
+                                ) : (
+                                    <><CheckCircle size={22} /> CONFIRMAR COBRO</>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
     )
 }

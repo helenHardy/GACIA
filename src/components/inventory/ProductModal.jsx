@@ -17,11 +17,14 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
     const [uploadingImage, setUploadingImage] = useState(false)
     const [branchSettings, setBranchSettings] = useState([])
     const [branches, setBranches] = useState([])
+    const [brands, setBrands] = useState([])
+    const [models, setModels] = useState([])
     const [loadingBranches, setLoadingBranches] = useState(true)
     const [error, setError] = useState(null)
 
     useEffect(() => {
         fetchInitialData()
+        fetchBrands()
     }, [])
 
     async function fetchInitialData() {
@@ -39,7 +42,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             const userRole = profileReq.data?.role
             const assignedBranchIds = (assignmentsReq.data || []).map(a => a.branch_id)
 
-            // Filter branches: Show all if Admin, otherwise only assigned
             if (userRole !== 'Administrador') {
                 allBranches = allBranches.filter(b => assignedBranchIds.includes(b.id))
             }
@@ -49,6 +51,25 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             console.error('Error fetching initial data:', err)
         } finally {
             setLoadingBranches(false)
+        }
+    }
+
+    async function fetchBrands() {
+        try {
+            const data = await inventoryService.getBrands()
+            setBrands(data || [])
+        } catch (err) {
+            console.error('Error fetching brands:', err)
+        }
+    }
+
+    async function fetchModels(brandId) {
+        if (!brandId) return
+        try {
+            const data = await inventoryService.getModelsByBrand(brandId)
+            setModels(data || [])
+        } catch (err) {
+            console.error('Error fetching models:', err)
         }
     }
 
@@ -64,6 +85,9 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                 image_url: product.image_url || '',
                 active: product.active ?? true
             })
+            if (product.brand_id) {
+                fetchModels(product.brand_id)
+            }
             fetchProductBranchSettings()
         }
     }, [product, branches])
@@ -138,36 +162,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         }
     }
 
-    const handleAddBrand = async () => {
-        if (!newBrandName.trim()) return
-        try {
-            const brand = await inventoryService.createBrand(newBrandName.trim())
-            setBrands(prev => [...prev, brand].sort((a, b) => a.name.localeCompare(b.name)))
-            setFormData(prev => ({ ...prev, brand_id: brand.id }))
-            setNewBrandName('')
-            setIsAddingBrand(false)
-            fetchModels(brand.id)
-        } catch (err) {
-            console.error(err)
-            setError('Error al crear marca')
-        }
-    }
-
-
-    const handleAddModel = async () => {
-        if (!newModelName.trim() || !formData.brand_id) return
-        try {
-            const model = await inventoryService.createModel(newModelName.trim(), formData.brand_id)
-            setModels(prev => [...prev, model].sort((a, b) => a.name.localeCompare(b.name)))
-            setFormData(prev => ({ ...prev, model_id: model.id }))
-            setNewModelName('')
-            setIsAddingModel(false)
-        } catch (err) {
-            console.error(err)
-            setError('Error al crear modelo')
-        }
-    }
-
     const handleImageUpload = async (e) => {
         const file = e.target.files[0]
         if (!file) return
@@ -187,7 +181,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         e.preventDefault()
         if (!formData.name) {
             setError('El nombre del producto es obligatorio')
-            alert('El nombre del producto es obligatorio')
             return
         }
 
@@ -198,11 +191,9 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             model_id: formData.model_id || null
         }
 
-        console.log('ProductModal: Saving data:', { ...dataToSave, branch_settings: branchSettings })
         onSave({ ...dataToSave, branch_settings: branchSettings })
     }
 
-    // Modern styles objects
     const sectionTitleStyle = {
         fontSize: '0.875rem',
         fontWeight: '700',
@@ -235,11 +226,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         backgroundColor: 'hsl(var(--background))',
         fontSize: '0.875rem',
         transition: 'all 0.2s ease',
-        outline: 'none',
-        ':focus': {
-            borderColor: 'hsl(var(--primary))',
-            boxShadow: '0 0 0 2px hsl(var(--primary) / 0.1)'
-        }
+        outline: 'none'
     }
 
     return (
@@ -269,7 +256,6 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                 borderRadius: '16px',
                 border: '1px solid hsl(var(--border))'
             }}>
-                {/* Header */}
                 <div style={{
                     padding: '1.5rem 2rem',
                     borderBottom: '1px solid hsl(var(--border))',
@@ -279,19 +265,13 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                     backgroundColor: 'hsl(var(--secondary) / 0.1)'
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div style={{
-                            padding: '0.5rem',
-                            backgroundColor: 'hsl(var(--primary) / 0.1)',
-                            color: 'hsl(var(--primary))',
-                            borderRadius: '12px'
-                        }}>
+                        <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}>
                             <Package size={24} />
                         </div>
                         <div>
                             <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>
                                 {product?.id ? 'Editar Modelo' : 'Nuevo Modelo'}
                             </h2>
-                            <p style={{ fontSize: '0.8rem', opacity: 0.6, margin: 0 }}>Gestione los detalles, stock y precios del modelo específico</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }} disabled={isSaving}>
@@ -307,205 +287,103 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2rem' }}>
+                            <div style={{ gridColumn: 'span 4' }}>
+                                <h3 style={sectionTitleStyle}><ImageIcon size={18} /> Multimedia</h3>
+                                <div style={{
+                                    width: '100%',
+                                    aspectRatio: '1',
+                                    backgroundColor: 'hsl(var(--secondary) / 0.3)',
+                                    borderRadius: '16px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '2px dashed hsl(var(--border))',
+                                    overflow: 'hidden',
+                                    position: 'relative'
+                                }}>
+                                    {formData.image_url ? (
+                                        <>
+                                            <img src={formData.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                                                style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'hsl(var(--destructive))', color: 'white', border: 'none', borderRadius: '8px', width: '32px', height: '32px', cursor: 'pointer' }}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div style={{ textAlign: 'center' }}>
+                                            <ImageIcon size={48} style={{ opacity: 0.2 }} />
+                                        </div>
+                                    )}
+                                    {!readOnly && (
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleImageUpload}
+                                            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                                        />
+                                    )}
+                                </div>
+                            </div>
 
-                            {/* Left Column: Media & Primary Details */}
-                            <div style={{ gridColumn: 'span 12', display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2rem' }}>
-
-                                <div style={{ gridColumn: 'span 4' }}>
-                                    <h3 style={sectionTitleStyle}><ImageIcon size={18} /> Multimedia</h3>
-                                    <div style={{
-                                        width: '100%',
-                                        aspectRatio: '1',
-                                        backgroundColor: 'hsl(var(--secondary) / 0.3)',
-                                        borderRadius: '16px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        border: '2px dashed hsl(var(--border))',
-                                        overflow: 'hidden',
-                                        position: 'relative',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.3s ease'
-                                    }}>
-                                        {formData.image_url ? (
-                                            <>
-                                                <img src={formData.image_url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-                                                <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: '5px' }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
-                                                        className="shadow-lg"
-                                                        style={{ backgroundColor: 'hsl(var(--destructive))', color: 'white', border: 'none', borderRadius: '8px', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <div style={{ textAlign: 'center', padding: '1rem' }}>
-                                                <ImageIcon size={48} style={{ opacity: 0.2, marginBottom: '0.5rem' }} />
-                                                <p style={{ fontSize: '0.75rem', fontWeight: '500', opacity: 0.5 }}>Arrastra o haz clic para subir</p>
-                                            </div>
-                                        )}
-                                        {!readOnly && (
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleImageUpload}
-                                                style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                                            />
-                                        )}
-                                        {uploadingImage && (
-                                            <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                <Loader2 size={32} className="animate-spin" style={{ color: 'hsl(var(--primary))' }} />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p style={{ fontSize: '0.7rem', opacity: 0.5, marginTop: '0.75rem', textAlign: 'center' }}>Formatos soportados: JPG, PNG, WebP (Máx 5MB)</p>
+                            <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                <h3 style={sectionTitleStyle}><Info size={18} /> Información General</h3>
+                                
+                                <div style={inputWrapperStyle}>
+                                    <label style={labelStyle}>Nombre del Modelo</label>
+                                    <input
+                                        name="name"
+                                        value={formData.name}
+                                        onChange={handleChange}
+                                        style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
+                                        readOnly={readOnly}
+                                        required
+                                    />
                                 </div>
 
-                                <div style={{ gridColumn: 'span 8', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <h3 style={sectionTitleStyle}><Info size={18} /> Información General</h3>
-
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
                                     <div style={inputWrapperStyle}>
-                                        <label style={labelStyle}>Nombre del Modelo</label>
+                                        <label style={labelStyle}>SKU / Código</label>
                                         <input
-                                            name="name"
-                                            value={formData.name}
+                                            name="sku"
+                                            value={formData.sku}
                                             onChange={handleChange}
-                                            placeholder="Ej: Camiseta Deportiva Pro"
-                                            className="form-input"
-                                            style={{ ...inputStyle, backgroundColor: readOnly ? 'hsl(var(--secondary) / 0.2)' : 'hsl(var(--background))' }}
-                                            readOnly={readOnly}
+                                            style={inputStyle}
+                                        />
+                                    </div>
+                                    <div style={inputWrapperStyle}>
+                                        <label style={labelStyle}>Precio de Venta (Único)</label>
+                                        <input
+                                            name="price"
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={formData.price}
+                                            onChange={handleChange}
+                                            onFocus={(e) => e.target.select()}
+                                            style={{ ...inputStyle, fontWeight: '800', color: 'hsl(var(--primary))' }}
                                             required
                                         />
                                     </div>
-
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1.5rem' }}>
-                                        <div style={inputWrapperStyle}>
-                                            <label style={labelStyle}>SKU / Código</label>
-                                            <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
-                                                <Barcode size={16} style={{ position: 'absolute', left: '10px', opacity: 0.4 }} />
-                                                <input
-                                                    name="sku"
-                                                    value={formData.sku}
-                                                    onChange={handleChange}
-                                                    placeholder="KOD-12345"
-                                                    style={{ ...inputStyle, paddingLeft: '2.4rem' }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
-                            </div>
-
-
-
-                            {/* Bottom Section: Branch Settings */}
-                            <div style={{ gridColumn: 'span 12' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                                    <h3 style={{ ...sectionTitleStyle, marginBottom: 0 }}><Building2 size={18} /> Stock y Precios por Sucursal</h3>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', padding: '0.4rem 0.8rem', borderRadius: '8px' }}>
-                                        <input
-                                            type="checkbox"
-                                            id="manage_batches"
-                                            checked={formData.manage_batches || false}
-                                            onChange={(e) => setFormData(prev => ({ ...prev, manage_batches: e.target.checked }))}
-                                            disabled={readOnly}
-                                            style={{ width: '16px', height: '16px', cursor: readOnly ? 'default' : 'pointer' }}
-                                        />
-                                        <label htmlFor="manage_batches" style={{ fontSize: '0.75rem', fontWeight: '600', cursor: readOnly ? 'default' : 'pointer' }}>Usar Lotes/Vencimientos</label>
-                                    </div>
-                                </div>
-
-                                {loadingBranches ? (
-                                    <div style={{ textAlign: 'center', padding: '2rem' }}><Loader2 size={32} className="animate-spin" style={{ color: 'hsl(var(--primary))' }} /></div>
-                                ) : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                        {branchSettings.map(s => (
-                                            <div key={s.branch_id} style={{ 
-                                                padding: '1.25rem', 
-                                                backgroundColor: 'hsl(var(--secondary) / 0.1)', 
-                                                borderRadius: '16px', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'space-between',
-                                                gap: '1rem' 
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                    <Building2 size={20} style={{ color: 'hsl(var(--primary))' }} />
-                                                    <span style={{ fontSize: '1rem', fontWeight: '800' }}>{s.branch_name}</span>
-                                                </div>
-                                                <div style={{ width: '150px' }}>
-                                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                                                        <span style={{ position: 'absolute', left: '12px', fontWeight: 'bold', opacity: 0.4, fontSize: '0.9rem' }}>{currencySymbol}</span>
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            step="0.01"
-                                                            placeholder="0.00"
-                                                            value={s.price === 0 ? '' : (s.price || '')}
-                                                            onChange={(e) => handleBranchSettingChange(s.branch_id, 'price', e.target.value)}
-                                                            onFocus={(e) => !readOnly && e.target.select()}
-                                                            readOnly={readOnly}
-                                                            style={{ 
-                                                                ...inputStyle, 
-                                                                textAlign: 'right', 
-                                                                paddingLeft: '2.5rem',
-                                                                backgroundColor: readOnly ? 'transparent' : 'white',
-                                                                borderRadius: '12px',
-                                                                fontWeight: '800',
-                                                                fontSize: '1.1rem'
-                                                            }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
                             </div>
                         </div>
 
-                        {/* Actions Footer */}
                         <div style={{
                             padding: '1.5rem 0',
                             borderTop: '1px solid hsl(var(--border))',
                             display: 'flex',
                             gap: '1rem',
-                            justifyContent: 'flex-end',
-                            marginTop: '1rem'
+                            justifyContent: 'flex-end'
                         }}>
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="btn btn-secondary"
-                                disabled={isSaving}
-                                style={{ padding: '0.75rem 2rem', fontWeight: '600' }}
-                            >
-                                Cancelar
-                            </button>
+                            <button type="button" onClick={onClose} className="btn btn-secondary" disabled={isSaving}>Cancelar</button>
                             {!readOnly && (
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={isSaving}
-                                    style={{ padding: '0.75rem 3rem', fontWeight: '700', minWidth: '200px', display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'center' }}
-                                >
-                                    {isSaving ? (
-                                        <>
-                                            <Loader2 size={18} className="animate-spin" />
-                                            Guardando...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save size={18} />
-                                            {product?.id ? 'Guardar Cambios' : 'Crear Modelo'}
-                                        </>
-                                    )}
+                                <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                                    {isSaving ? <Loader2 className="animate-spin" /> : (product?.id ? 'Guardar Cambios' : 'Crear Modelo')}
                                 </button>
                             )}
                         </div>
