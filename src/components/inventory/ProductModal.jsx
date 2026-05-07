@@ -5,6 +5,7 @@ import { inventoryService } from '../../services/inventoryService'
 
 export default function ProductModal({ product, onClose, onSave, isSaving, currencySymbol = 'Bs.', readOnly = false }) {
     const [formData, setFormData] = useState({
+        id: null,
         name: '',
         sku: '',
         brand_id: '',
@@ -73,24 +74,31 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         }
     }
 
+    // Solo cargar datos iniciales una vez al montar o si el objeto product cambia su identidad real (ID)
     useEffect(() => {
         if (product) {
-            setFormData({
-                name: product.name || '',
-                sku: product.sku || '',
-                brand_id: product.brand_id || '',
-                model_id: product.model_id || '',
-                description: product.description || '',
-                price: product.price || 0,
-                image_url: product.image_url || '',
-                active: product.active ?? true
+            setFormData(prev => {
+                // Si ya estamos editando algo y el producto es el mismo (mismo ID o ambos nuevos), no resetear
+                if (prev.id === product.id && (prev.name || prev.sku)) return prev;
+                
+                return {
+                    id: product.id || null,
+                    name: product.name || '',
+                    sku: product.sku || '',
+                    brand_id: product.brand_id || '',
+                    model_id: product.model_id || '',
+                    description: product.description || '',
+                    price: product.price || 0,
+                    image_url: product.image_url || '',
+                    active: product.active ?? true
+                }
             })
             if (product.brand_id) {
                 fetchModels(product.brand_id)
             }
             fetchProductBranchSettings()
         }
-    }, [product, branches])
+    }, [product?.id, branches]) // Solo disparar si cambia el ID o la lista de sucursales
 
     async function fetchProductBranchSettings() {
         try {
@@ -184,11 +192,19 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             return
         }
 
+        // Limpiar los datos para no enviar un 'id' nulo a Supabase
+        const { id, ...restOfData } = formData
+        
         const dataToSave = {
-            ...formData,
+            ...restOfData,
             sku: formData.sku?.trim() || null,
             brand_id: formData.brand_id || null,
             model_id: formData.model_id || null
+        }
+
+        // Si existe un id (es edición), lo volvemos a poner
+        if (id) {
+            dataToSave.id = id
         }
 
         onSave({ ...dataToSave, branch_settings: branchSettings })

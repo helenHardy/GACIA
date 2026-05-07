@@ -308,6 +308,8 @@ export default function Inventory() {
         }
     }
 
+    const isCasaMatriz = branches.find(b => b.id === selectedBranchId)?.name.includes('Casa Matriz')
+
     const filteredProducts = products
         .filter(p =>
             (p.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
@@ -317,10 +319,14 @@ export default function Inventory() {
         .filter(p => !selectedBrand || p.brand_id === selectedBrand.id)
         .filter(p => !selectedModelId || p.model_id === selectedModelId)
         .filter(p => {
-            const isCasaMatriz = branches.find(b => b.id === selectedBranchId)?.name.includes('Casa Matriz')
             if (isCasaMatriz) return true
             return (p.current_stock || 0) > 0
         })
+
+    const visibleBrands = brands.filter(b => {
+        if (isCasaMatriz) return true
+        return products.some(p => p.brand_id === b.id && (p.current_stock || 0) > 0)
+    })
 
     return (
         <div style={{ position: 'relative', paddingBottom: '2rem' }}>
@@ -468,7 +474,7 @@ export default function Inventory() {
                 >
                     TODAS
                 </button>
-                {brands.map(b => (
+                {visibleBrands.map(b => (
                     <button 
                         key={b.id}
                         onClick={() => {
@@ -522,7 +528,13 @@ export default function Inventory() {
                     >
                         Todos los productos
                     </button>
-                    {models.filter(m => m.brand_id === selectedBrand.id).map(m => (
+                    {models
+                        .filter(m => m.brand_id === selectedBrand.id)
+                        .filter(m => {
+                            if (isCasaMatriz) return true
+                            return products.some(p => p.model_id === m.id && (p.current_stock || 0) > 0)
+                        })
+                        .map(m => (
                         <button 
                             key={m.id}
                             onClick={() => setSelectedModelId(m.id)}

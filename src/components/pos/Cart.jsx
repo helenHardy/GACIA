@@ -1,7 +1,7 @@
 import React from 'react'
 import { Plus, Minus, Trash2, Package, ShoppingCart, Box } from 'lucide-react'
 
-export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity, currencySymbol = 'Bs.' }) {
+export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity, onSetPrice, currencySymbol = 'Bs.' }) {
     if (items.length === 0) {
         return (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--secondary-foreground))', padding: '2rem', opacity: 0.3 }}>
@@ -106,7 +106,12 @@ export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity,
                                         e.currentTarget.blur();
                                     }
                                 }}
-                                onChange={(e) => onSetQuantity(item.id, parseInt(e.target.value) || 0)}
+                                onChange={(e) => {
+                                    let val = parseInt(e.target.value) || 0
+                                    if (val < 0) val = 0
+                                    if (item.stock && val > item.stock) val = item.stock
+                                    onSetQuantity(item.id, val)
+                                }}
                             />
                             <button
                                 className="btn"
@@ -117,6 +122,7 @@ export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity,
                                 <Plus size={14} />
                             </button>
                         </div>
+                        {item.stock != null && <p style={{ margin: '0.2rem 0 0', fontSize: '0.6rem', fontWeight: '700', opacity: 0.35, textAlign: 'center' }}>Disp: {item.stock}</p>}
                     </div>
 
                     <div style={{ textAlign: 'right', minWidth: '100px' }}>
