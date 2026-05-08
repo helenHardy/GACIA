@@ -56,10 +56,7 @@ const Ticket = forwardRef(({ sale, items, branch, customer, paymentMethod, curre
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                 <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                        <div style={{ width: '32px', height: '32px', backgroundColor: '#2563eb', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                            <span style={{ fontWeight: '900', fontSize: '16px' }}>A</span>
-                        </div>
-                        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1a365d', letterSpacing: '-0.04em' }}>GACIA ERP</h1>
+                        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: '900', color: '#1a365d', letterSpacing: '-0.04em' }}>GACIA</h1>
                     </div>
                     <div style={{ color: '#4a5568', fontSize: '10px' }}>
                         <p style={{ margin: '0 0 1px 0', fontWeight: '700' }}>{branch?.name || 'Casa Matriz'}</p>
@@ -146,11 +143,7 @@ const Ticket = forwardRef(({ sale, items, branch, customer, paymentMethod, curre
                 </div>
             </div>
 
-            {/* Footer */}
-            <div style={{ marginTop: '30px', textAlign: 'center' }}>
-                <p style={{ margin: '0 0 4px 0', fontSize: '11px', fontWeight: '800', color: '#1a365d' }}>¡GRACIAS POR SU PREFERENCIA!</p>
-                <p style={{ margin: '0', fontSize: '9px', color: '#718096' }}>Documento de venta interna sin validez fiscal. Generado por GACIA ERP v2.0</p>
-            </div>
+            {/* Footer removed per user request */}
         </div>
     )
 })

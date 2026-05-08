@@ -219,7 +219,7 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                 {/* Right Panel - Customer & Confirmation */}
                 <div style={{ flex: '1 1 60%', padding: '2rem', backgroundColor: 'hsl(var(--background))', display: 'flex', flexDirection: 'column', gap: '1.25rem', position: 'relative' }}>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', alignItems: 'stretch' }}>
                             {/* Seller Selector */}
                             <div>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, marginBottom: '0.5rem' }}>
@@ -254,7 +254,7 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                     <User size={12} /> Cliente para la Factura
                                 </label>
                                 <div style={{ position: 'relative' }}>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
                                         <button
                                             type="button"
                                             style={{
@@ -267,7 +267,8 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                                 alignItems: 'center',
                                                 gap: '0.75rem',
                                                 cursor: 'pointer',
-                                                textAlign: 'left'
+                                                textAlign: 'left',
+                                                minHeight: '54px'
                                             }}
                                             onClick={() => { setShowCustomerList(!showCustomerList); setIsCreatingCustomer(false); }}
                                             disabled={isProcessing}
@@ -279,8 +280,7 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                                 <p style={{ fontSize: '0.85rem', fontWeight: '700', margin: 0 }}>{selectedCustomer ? selectedCustomer.name : 'Cliente General (Contado)'}</p>
                                                 {selectedCustomer && (
                                                     <p style={{ fontSize: '0.75rem', fontWeight: '800', margin: 0, color: selectedCustomer.current_balance > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
-                                                        Saldo: {currencySymbol}{parseFloat(selectedCustomer.current_balance || 0).toFixed(2)} 
-                                                        {selectedCustomer.current_balance > 0 ? ' (Deuda)' : ' (Al día)'}
+                                                        Saldo: {currencySymbol}{parseFloat(selectedCustomer.current_balance || 0).toFixed(2)}
                                                     </p>
                                                 )}
                                             </div>
@@ -291,19 +291,24 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                             onClick={startCreateCustomer}
                                             disabled={isProcessing}
                                             style={{
-                                                padding: '0 1rem',
+                                                width: '100px',
                                                 backgroundColor: 'hsl(var(--primary) / 0.1)',
                                                 border: '1px solid hsl(var(--primary) / 0.2)',
                                                 borderRadius: '14px',
                                                 color: 'hsl(var(--primary))',
                                                 cursor: 'pointer',
                                                 display: 'flex',
+                                                flexDirection: 'column',
                                                 alignItems: 'center',
-                                                gap: '0.5rem'
+                                                justifyContent: 'center',
+                                                gap: '0.25rem',
+                                                transition: 'all 0.2s'
                                             }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.15)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.1)'}
                                         >
-                                            <UserPlus size={18} />
-                                            <span style={{ fontSize: '0.7rem', fontWeight: '800' }}>NUEVO</span>
+                                            <UserPlus size={20} />
+                                            <span style={{ fontSize: '0.6rem', fontWeight: '900' }}>NUEVO</span>
                                         </button>
                                     </div>
 
@@ -419,26 +424,10 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                         {/* Specific Payment Inputs */}
                         <div style={{ flex: 1 }}>
                             {paymentMethod === 'Efectivo' && (
-                                <div style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.4)', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '1.5rem', alignItems: 'center' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontWeight: '800', fontSize: '0.8rem', opacity: 0.6, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Monto recibido</label>
-                                        <div style={{ position: 'relative' }}>
-                                            <span style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', fontWeight: '800', opacity: 0.3 }}>{currencySymbol}</span>
-                                            <input
-                                                type="number"
-                                                placeholder="0.00"
-                                                value={amountPaid}
-                                                onChange={(e) => setAmountPaid(e.target.value)}
-                                                disabled={isProcessing}
-                                                style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.25rem', fontSize: '1.5rem', fontWeight: '900', borderRadius: '12px', border: '1px solid hsl(var(--border) / 0.6)', outline: 'none' }}
-                                                autoFocus
-                                            />
-                                        </div>
-                                    </div>
-                                    <div style={{ padding: '0.75rem 1.25rem', backgroundColor: 'white', borderRadius: '14px', border: '1px solid hsl(142 76% 36% / 0.2)', textAlign: 'right' }}>
-                                        <span style={{ display: 'block', fontWeight: '800', fontSize: '0.7rem', opacity: 0.4, textTransform: 'uppercase', marginBottom: '0.25rem' }}>Su Cambio</span>
-                                        <span style={{ fontSize: '1.75rem', fontWeight: '900', color: 'hsl(142 76% 36%)', letterSpacing: '-0.02em' }}>{currencySymbol}{change}</span>
-                                    </div>
+                                <div style={{ padding: '1.5rem', backgroundColor: 'hsl(142 76% 36% / 0.05)', borderRadius: '20px', border: '1px solid hsl(142 76% 36% / 0.1)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Banknote size={48} style={{ color: 'hsl(142 76% 36%)', opacity: 0.5 }} />
+                                    <p style={{ fontWeight: '800', color: 'hsl(142 76% 36%)', margin: 0 }}>Pago en Efectivo</p>
+                                    <p style={{ fontSize: '0.8rem', opacity: 0.5, margin: 0 }}>El cliente paga el monto exacto o el cambio se maneja externamente.</p>
                                 </div>
                             )}
 
