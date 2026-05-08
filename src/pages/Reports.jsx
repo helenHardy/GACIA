@@ -16,7 +16,8 @@ import {
     Layers,
     ArrowRight,
     Eye,
-    X
+    X,
+    Printer
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { utils, writeFile } from 'xlsx'
@@ -60,6 +61,191 @@ export default function Reports() {
         } else {
             fetchInvoices()
         }
+    }
+
+    function handlePrint() {
+        if (!selectedInvoice) return
+
+        const printWindow = window.open('', '_blank', 'width=800,height=900')
+        const totalPaid = selectedInvoice.customer_payments?.reduce((acc, p) => acc + Number(p.amount), 0) || 0
+        const balance = Number(selectedInvoice.total) - totalPaid
+
+        let paymentsHtml = ''
+        if (selectedInvoice.is_credit) {
+            let runningBalance = Number(selectedInvoice.total)
+            const sortedPayments = [...(selectedInvoice.customer_payments || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+            
+            paymentsHtml = `
+                <h3 style="margin-top: 30px; text-transform: uppercase; font-size: 14px;">Detalle de Crédito</h3>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px;">
+                    <thead>
+                        <tr style="background-color: #f1f5f9;">
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Fecha/Hora</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Monto Abonado</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${new Date(selectedInvoice.created_at).toLocaleString()}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">0.00 Bs.</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold;">${Number(selectedInvoice.total).toFixed(2)} Bs.</td>
+                        </tr>
+                        ${sortedPayments.map(p => {
+                            runningBalance -= Number(p.amount)
+                            return `
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${new Date(p.created_at).toLocaleString()}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${Number(p.amount).toFixed(2)} Bs.</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px; text-align: right; font-weight: bold;">${runningBalance.toFixed(2)} Bs.</td>
+                                </tr>
+                            `
+                        }).join('')}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f8fafc; font-weight: bold;">
+                            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">TOTAL PAGADO:</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalPaid.toFixed(2)} Bs.</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">SALDO: ${balance.toFixed(2)} Bs.</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            `
+        }
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Factura #${selectedInvoice.sale_number}</title>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; }
+                        td { border: 1px solid #e2e8f0; padding: 12px; font-size: 13px; }
+                        .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
+                        .total-box { text-align: right; margin-top: 20px; font-size: 18px; font-weight: bold; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div>
+                            <h1 style="margin: 0; color: #1e293b;">COMPROBANTE DE VENTA</h1>
+                            <p style="margin: 5px 0; color: #64748b;">Nro de Factura: <strong>#${selectedInvoice.sale_number}</strong></p>
+                            <p style="margin: 5px 0; color: #64748b;">Fecha: ${new Date(selectedInvoice.created_at).toLocaleString()}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p style="margin: 0; font-weight: bold;">Cliente: ${selectedInvoice.customers?.name || 'Venta General'}</p>
+                            <p style="margin: 5px 0; color: #64748b;">Vendedor: ${selectedInvoice.seller?.full_name || 'Admin'}</p>
+                        </div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Producto</th>
+                                <th style="text-align: center;">Cant.</th>
+                                <th style="text-align: right;">P. Unitario</th>
+                                <th style="text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${selectedInvoice.items?.map(item => `
+                                <tr>
+                                    <td>${item.product?.sku || 'N/A'}</td>
+                                    <td>${item.product?.name}</td>
+                                    <td style="text-align: center;">${item.quantity}</td>
+                                    <td style="text-align: right;">${Number(item.price).toFixed(2)}</td>
+                                    <td style="text-align: right;">${(item.quantity * item.price).toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="total-box">
+                        TOTAL: Bs. ${Number(selectedInvoice.total).toFixed(2)}
+                    </div>
+
+                    ${paymentsHtml}
+
+                    <div style="margin-top: 50px; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px dashed #eee; padding-top: 20px;">
+                        Gracias por su preferencia - Documento generado desde el Sistema de Ventas
+                    </div>
+                </body>
+            </html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+    }
+
+    function handlePrintSalesReport() {
+        if (soldProducts.length === 0) return
+
+        const printWindow = window.open('', '_blank', 'width=1000,height=900')
+        const totalSold = soldProducts.reduce((acc, item) => acc + (item.quantity * item.price), 0)
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Reporte de Ventas - ${new Date().toLocaleDateString()}</title>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                        td { border: 1px solid #e2e8f0; padding: 10px; font-size: 12px; }
+                        .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+                        .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; }
+                        .total-row { background-color: #f1f5f9; font-weight: bold; font-size: 14px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1 style="margin: 0; color: #1e293b;">REPORTE DE VENTAS POR PRODUCTO</h1>
+                        <p style="margin: 5px 0; color: #64748b;">Generado el: ${new Date().toLocaleString()}</p>
+                        <p style="margin: 5px 0; color: #64748b;">Periodo: ${period === 'day' ? startDate : `${startDate} al ${endDate}`}</p>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>SKU</th>
+                                <th>Marca</th>
+                                <th>Modelo</th>
+                                <th style="text-align: center;">Cant.</th>
+                                <th style="text-align: right;">P. Unitario</th>
+                                <th style="text-align: right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${soldProducts.map((item, index) => `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td>${item.product?.sku || 'N/A'}</td>
+                                    <td>${item.product?.brand?.name || 'N/A'}</td>
+                                    <td>${item.product?.model?.name || 'N/A'}</td>
+                                    <td style="text-align: center;">${item.quantity}</td>
+                                    <td style="text-align: right;">Bs. ${Number(item.price).toFixed(2)}</td>
+                                    <td style="text-align: right; font-weight: bold;">Bs. ${(item.quantity * item.price).toFixed(2)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td colspan="6" style="text-align: right; padding: 15px;">TOTAL GENERAL</td>
+                                <td style="text-align: right; padding: 15px;">Bs. ${totalSold.toFixed(2)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="footer">
+                        Documento generado automáticamente por el Sistema de Ventas
+                    </div>
+                </body>
+            </html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
     }
 
     async function fetchSoldProducts() {
@@ -385,7 +571,34 @@ export default function Reports() {
             {/* Content Area */}
             {activeTab === 'products' ? (
                 /* TAB 1: PRODUCTOS VENDIDOS */
-                <div className="card shadow-sm" style={{ padding: 0, borderRadius: '24px', overflow: 'hidden', border: '1px solid hsl(var(--border) / 0.5)' }}>
+                <div className="card shadow-sm" style={{ padding: 0, borderRadius: '24px', overflow: 'hidden', border: '1px solid hsl(var(--border) / 0.5)', backgroundColor: 'white' }}>
+                    <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid #eee', backgroundColor: '#f8f9fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: 'hsl(var(--primary))' }}>Resumen de Productos Vendidos</h3>
+                            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.5 }}>Desglose detallado por ítem</p>
+                        </div>
+                        <button 
+                            onClick={handlePrintSalesReport}
+                            style={{ 
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.6rem 1.25rem',
+                                borderRadius: '12px',
+                                border: '1.5px solid hsl(var(--primary))',
+                                backgroundColor: 'hsl(var(--primary) / 0.05)',
+                                color: 'hsl(var(--primary))',
+                                fontSize: '0.8rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                transition: '0.2s'
+                            }}
+                            onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--primary))'; e.currentTarget.style.color = 'white' }}
+                            onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--primary) / 0.05)'; e.currentTarget.style.color = 'hsl(var(--primary))' }}
+                        >
+                            <Printer size={18} /> IMPRIMIR REPORTE (PDF)
+                        </button>
+                    </div>
                     <div style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                             <thead style={{ backgroundColor: 'hsl(var(--secondary) / 0.3)' }}>
@@ -522,9 +735,32 @@ export default function Reports() {
                             <>
                                 <div style={{ padding: '1.25rem', backgroundColor: '#f8fafc', borderBottom: '1px solid #eee' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                        <div>
-                                            <h4 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--primary))' }}>Detalle de Factura #{selectedInvoice.sale_number}</h4>
-                                            <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', opacity: 0.5 }}>Cliente: {selectedInvoice.customers?.name || 'Venta General'}</p>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--primary))' }}>Detalle de Factura #{selectedInvoice.sale_number}</h4>
+                                                <p style={{ margin: '0.2rem 0 0', fontSize: '0.85rem', opacity: 0.5 }}>Cliente: {selectedInvoice.customers?.name || 'Venta General'}</p>
+                                            </div>
+                                            <button 
+                                                onClick={handlePrint}
+                                                style={{ 
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '0.5rem',
+                                                    padding: '0.5rem 1rem',
+                                                    borderRadius: '10px',
+                                                    border: '1.5px solid #eee',
+                                                    backgroundColor: 'white',
+                                                    color: '#64748b',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: '800',
+                                                    cursor: 'pointer',
+                                                    transition: '0.2s'
+                                                }}
+                                                onMouseOver={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--primary))'; e.currentTarget.style.color = 'hsl(var(--primary))' }}
+                                                onMouseOut={(e) => { e.currentTarget.style.borderColor = '#eee'; e.currentTarget.style.color = '#64748b' }}
+                                            >
+                                                <Printer size={16} /> IMPRIMIR PDF
+                                            </button>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                             <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Bs. {Number(selectedInvoice.total).toFixed(2)}</p>
@@ -566,24 +802,57 @@ export default function Reports() {
                                         </tbody>
                                     </table>
                                 </div>
-                                {selectedInvoice.customer_payments?.length > 0 && (
-                                    <div style={{ padding: '1.5rem', backgroundColor: '#f0f9ff', borderTop: '1px solid #e0f2fe' }}>
-                                        <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.75rem', fontWeight: '900', color: 'hsl(var(--primary))', textTransform: 'uppercase' }}>Historial de Pagos / Abonos:</p>
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            {selectedInvoice.customer_payments.map(p => (
-                                                <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 1rem', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e0f2fe' }}>
-                                                    <div>
-                                                        <span style={{ fontSize: '0.8rem', fontWeight: '800' }}>{new Date(p.created_at).toLocaleDateString()}</span>
-                                                        <span style={{ fontSize: '0.75rem', opacity: 0.5, marginLeft: '0.5rem' }}>via {p.payment_method}</span>
-                                                    </div>
-                                                    <span style={{ fontSize: '0.85rem', fontWeight: '900', color: '#10b981' }}>+ Bs. {Number(p.amount).toFixed(2)}</span>
-                                                </div>
-                                            ))}
-                                            <div style={{ textAlign: 'right', marginTop: '0.5rem', borderTop: '1px dashed #bae6fd', paddingTop: '0.5rem' }}>
-                                                <span style={{ fontSize: '0.85rem', fontWeight: '900' }}>
-                                                    Total Pagado: Bs. {selectedInvoice.customer_payments.reduce((acc, p) => acc + Number(p.amount), 0).toFixed(2)}
-                                                </span>
-                                            </div>
+                                {selectedInvoice.is_credit && (
+                                    <div style={{ padding: '1.5rem', backgroundColor: '#fdfdfd', borderTop: '2px solid #eee' }}>
+                                        <p style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: '900', color: '#334155', textTransform: 'uppercase', letterSpacing: '1px' }}>DETALLE DE CRÉDITO</p>
+                                        
+                                        <div style={{ border: '1px solid #ddd', borderRadius: '8px', overflow: 'hidden' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                                                <thead>
+                                                    <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '1px solid #ddd' }}>
+                                                        <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '800', borderRight: '1px solid #ddd' }}>Fecha</th>
+                                                        <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '800', borderRight: '1px solid #ddd' }}>Hora</th>
+                                                        <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '800', borderRight: '1px solid #ddd' }}>Monto</th>
+                                                        <th style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '800' }}>Saldo</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {/* Initial Row: The Debt itself */}
+                                                    <tr style={{ borderBottom: '1px solid #eee' }}>
+                                                        <td style={{ padding: '0.75rem', borderRight: '1px solid #ddd' }}>{new Date(selectedInvoice.created_at).toLocaleDateString()}</td>
+                                                        <td style={{ padding: '0.75rem', borderRight: '1px solid #ddd' }}>{new Date(selectedInvoice.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                                                        <td style={{ padding: '0.75rem', textAlign: 'right', borderRight: '1px solid #ddd' }}>0.00 Bs.</td>
+                                                        <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '800' }}>{Number(selectedInvoice.total).toFixed(2)} Bs.</td>
+                                                    </tr>
+                                                    
+                                                    {/* Payment Rows */}
+                                                    {(() => {
+                                                        let runningBalance = Number(selectedInvoice.total)
+                                                        return selectedInvoice.customer_payments?.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).map(p => {
+                                                            runningBalance -= Number(p.amount)
+                                                            return (
+                                                                <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+                                                                    <td style={{ padding: '0.75rem', borderRight: '1px solid #ddd' }}>{new Date(p.created_at).toLocaleDateString()}</td>
+                                                                    <td style={{ padding: '0.75rem', borderRight: '1px solid #ddd' }}>{new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                                                                    <td style={{ padding: '0.75rem', textAlign: 'right', borderRight: '1px solid #ddd', color: '#10b981', fontWeight: '800' }}>{Number(p.amount).toFixed(2)} Bs.</td>
+                                                                    <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: '800' }}>{runningBalance.toFixed(2)} Bs.</td>
+                                                                </tr>
+                                                            )
+                                                        })
+                                                    })()}
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr style={{ backgroundColor: '#f8fafc', fontWeight: '900' }}>
+                                                        <td colSpan="2" style={{ padding: '0.75rem', textAlign: 'right', borderRight: '1px solid #ddd' }}>TOTAL PAGADO:</td>
+                                                        <td style={{ padding: '0.75rem', textAlign: 'right', borderRight: '1px solid #ddd', color: '#10b981' }}>
+                                                            {selectedInvoice.customer_payments?.reduce((acc, p) => acc + Number(p.amount), 0).toFixed(2)} Bs.
+                                                        </td>
+                                                        <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                                            SALDO ACTUAL: {(Number(selectedInvoice.total) - (selectedInvoice.customer_payments?.reduce((acc, p) => acc + Number(p.amount), 0) || 0)).toFixed(2)} Bs.
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
                                         </div>
                                     </div>
                                 )}
