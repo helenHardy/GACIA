@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, Banknote, QrCode, CheckCircle, RefreshCw, User, HandCoins, Search, ChevronDown, Wallet, ArrowRight, UserPlus, Info, Split, Tag, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-export default function CheckoutModal({ total, onClose, onConfirm, isProcessing, currencySymbol = 'Bs.', initialCustomer = null }) {
+export default function CheckoutModal({ total, onClose, onConfirm, isProcessing, currencySymbol = 'Bs.', initialCustomer = null, branchId }) {
     const [paymentMethod, setPaymentMethod] = useState('Efectivo')
     const [amountPaid, setAmountPaid] = useState('')
     const [customers, setCustomers] = useState([])
@@ -26,21 +26,45 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
 
     useEffect(() => {
         async function fetchData() {
-            const [customersRes, sellersRes, userRes] = await Promise.all([
+            let sellersData = []
+            if (branchId && branchId !== 'all') {
+                const { data: assignments } = await supabase
+                    .from('user_branches')
+                    .select('user_id')
+                    .eq('branch_id', branchId)
+                
+                const userIds = assignments?.map(a => a.user_id) || []
+                
+                if (userIds.length > 0) {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, role')
+                        .in('id', userIds)
+                        .in('role', ['Administrador', 'Cajero', 'Vendedor'])
+                    sellersData = data || []
+                }
+            } else {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, role')
+                    .in('role', ['Administrador', 'Cajero', 'Vendedor'])
+                sellersData = data || []
+            }
+
+            const [customersRes, userRes] = await Promise.all([
                 supabase.from('customers').select('*').eq('active', true).order('name'),
-                supabase.from('profiles').select('id, full_name, role').in('role', ['Administrador', 'Cajero', 'Vendedor']),
                 supabase.auth.getUser()
             ])
             
             setCustomers(customersRes.data || [])
-            setSellers(sellersRes.data || [])
+            setSellers(sellersData.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')))
             
             if (userRes.data?.user) {
                 setSelectedSellerId(userRes.data.user.id)
             }
         }
         fetchData()
-    }, [])
+    }, [branchId])
 
     const filteredCustomers = customers.filter(c =>
         c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||

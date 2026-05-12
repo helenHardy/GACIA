@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { Plus, Search, Users, Edit2, Trash2, RefreshCw, AlertTriangle, Phone, Mail, MapPin, HandCoins, TrendingUp, X, Download, DollarSign, UserCheck, UserX } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import CustomerModal from '../components/customers/CustomerModal'
-import CustomerPaymentsModal from '../components/customers/CustomerPaymentsModal'
-import CustomerLedgerDrawer from '../components/customers/CustomerLedgerDrawer'
 
 export default function Customers() {
     const [customers, setCustomers] = useState([])
@@ -22,8 +20,7 @@ export default function Customers() {
     const [metrics, setMetrics] = useState({
         total: 0,
         active: 0,
-        inactive: 0,
-        totalDebt: 0
+        inactive: 0
     })
 
     useEffect(() => {
@@ -54,9 +51,8 @@ export default function Customers() {
         const total = data.length
         const active = data.filter(c => c.active).length
         const inactive = total - active
-        const totalDebt = data.reduce((sum, c) => sum + (c.current_balance || 0), 0)
 
-        setMetrics({ total, active, inactive, totalDebt })
+        setMetrics({ total, active, inactive })
     }
 
     // Toast state
@@ -104,38 +100,6 @@ export default function Customers() {
         }
     }
 
-    const handleSavePayment = async (paymentData) => {
-        try {
-            setIsSaving(true)
-            // 1. Insert payment record
-            const { error: pError } = await supabase
-                .from('customer_payments')
-                .insert([paymentData])
-            if (pError) throw pError
-
-            // 2. Update customer balance
-            const { data: customer } = await supabase
-                .from('customers')
-                .select('current_balance')
-                .eq('id', paymentData.customer_id)
-                .single()
-
-            const { error: cError } = await supabase
-                .from('customers')
-                .update({ current_balance: (customer?.current_balance || 0) - paymentData.amount })
-                .eq('id', paymentData.customer_id)
-            if (cError) throw cError
-
-            setPayingCustomer(null)
-            fetchCustomers()
-            showToast('Pago registrado con éxito')
-        } catch (err) {
-            console.error('Error saving payment:', err)
-            showToast('Error al registrar el pago: ' + err.message, 'error')
-        } finally {
-            setIsSaving(false)
-        }
-    }
 
     const confirmDelete = async () => {
         if (!deleteId) return
@@ -291,15 +255,6 @@ export default function Customers() {
                     </div>
                 </div>
                 <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.6)', backgroundColor: 'white', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ padding: '1rem', borderRadius: '16px', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))' }}>
-                        <DollarSign size={28} />
-                    </div>
-                    <div>
-                        <p style={{ fontSize: '0.85rem', fontWeight: '600', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deuda Total</p>
-                        <p style={{ fontSize: '2rem', fontWeight: '900', color: 'hsl(var(--foreground))', lineHeight: 1 }}>${metrics.totalDebt.toFixed(2)}</p>
-                    </div>
-                </div>
-                <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.6)', backgroundColor: 'white', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ padding: '1rem', borderRadius: '16px', backgroundColor: 'hsl(142 76% 36% / 0.1)', color: 'hsl(142 76% 36%)' }}>
                         <UserCheck size={28} />
                     </div>
@@ -349,7 +304,6 @@ export default function Customers() {
                                     <th style={{ padding: '1rem', textAlign: 'left' }}>Cliente</th>
                                     <th style={{ padding: '1rem', textAlign: 'left' }}>Identificación</th>
                                     <th style={{ padding: '1rem', textAlign: 'left' }}>Estado</th>
-                                    <th style={{ padding: '1rem', textAlign: 'right' }}>Deuda</th>
                                     <th style={{ padding: '1rem', textAlign: 'right' }}>Acciones</th>
                                 </tr>
                             </thead>
@@ -393,31 +347,8 @@ export default function Customers() {
                                                 {customer.active ? 'ACTIVO' : 'INACTIVO'}
                                             </span>
                                         </td>
-                                        <td style={{ padding: '1rem', textAlign: 'right', border: '1px solid hsl(var(--border) / 0.3)', borderLeft: 'none', borderRight: 'none' }}>
-                                            <div style={{ fontWeight: '900', color: (customer.current_balance || 0) > 0 ? 'hsl(var(--destructive))' : 'hsl(142 76% 36%)' }}>
-                                                ${(customer.current_balance || 0).toFixed(2)}
-                                            </div>
-                                            <div style={{ fontSize: '0.65rem', opacity: 0.5 }}>Límite: ${(customer.credit_limit || 0).toFixed(2)}</div>
-                                        </td>
                                         <td style={{ padding: '1rem', textAlign: 'right', borderTopRightRadius: '12px', borderBottomRightRadius: '12px', border: '1px solid hsl(var(--border) / 0.3)', borderLeft: 'none' }}>
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
-                                                <button
-                                                    onClick={() => setPayingCustomer(customer)}
-                                                    className="btn btn-primary"
-                                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px', fontWeight: '800' }}
-                                                    title="Abonar Pago"
-                                                >
-                                                    <HandCoins size={14} />
-                                                </button>
-                                                <button
-                                                    onClick={() => setViewingLedgerCustomer(customer)}
-                                                    className="btn"
-                                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', borderRadius: '8px', backgroundColor: 'white', border: '1px solid hsl(var(--border))' }}
-                                                    title="Ver Historial"
-                                                >
-                                                    <TrendingUp size={14} />
-                                                </button>
-                                                <div style={{ width: '1px', height: '24px', backgroundColor: 'hsl(var(--border))', margin: '0 0.2rem' }}></div>
                                                 <button
                                                     onClick={() => { setEditingCustomer(customer); setIsModalOpen(true); }}
                                                     className="btn"
@@ -444,25 +375,6 @@ export default function Customers() {
                 )}
             </div>
 
-            {
-                payingCustomer && (
-                    <CustomerPaymentsModal
-                        customer={payingCustomer}
-                        isSaving={isSaving}
-                        onClose={() => setPayingCustomer(null)}
-                        onSave={handleSavePayment}
-                    />
-                )
-            }
-
-            {
-                viewingLedgerCustomer && (
-                    <CustomerLedgerDrawer
-                        customer={viewingLedgerCustomer}
-                        onClose={() => setViewingLedgerCustomer(null)}
-                    />
-                )
-            }
         </div>
     )
 }

@@ -249,6 +249,7 @@ export default function POS() {
                     total={total}
                     isProcessing={isProcessing}
                     currencySymbol={currencySymbol}
+                    branchId={selectedBranchId}
                     onClose={() => setIsCheckoutOpen(false)}
                     onConfirm={handleCheckout}
                 />

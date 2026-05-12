@@ -53,7 +53,9 @@ export function BranchProvider({ children }) {
                 const savedId = localStorage.getItem('selectedBranchId')
                 const exists = finalBranches.find(b => b.id.toString() === savedId)
                 
-                if (exists) {
+                if (savedId === 'all') {
+                    setSelectedBranchId('all')
+                } else if (exists) {
                     setSelectedBranchId(exists.id)
                 } else {
                     setSelectedBranchId(defaultId)
@@ -68,7 +70,7 @@ export function BranchProvider({ children }) {
 
     const selectBranch = (id) => {
         setSelectedBranchId(id)
-        localStorage.setItem('selectedBranchId', id)
+        localStorage.setItem('selectedBranchId', id.toString())
     }
 
     const value = {

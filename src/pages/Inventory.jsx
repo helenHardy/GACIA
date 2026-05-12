@@ -86,12 +86,11 @@ export default function Inventory() {
     }
 
     useEffect(() => {
-        if (branches.length > 0 && (selectedBranchId === 'all' || !selectedBranchId)) {
+        if (branches.length > 0 && !selectedBranchId) {
             const casaMatriz = branches.find(b => b.name.includes('Casa Matriz'))
             if (casaMatriz) {
                 setSelectedBranchId(casaMatriz.id)
             } else if (branches.length > 0) {
-                // If Casa Matriz not found, select the first real branch
                 const firstBranch = branches.find(b => b.id !== 'all')
                 if (firstBranch) setSelectedBranchId(firstBranch.id)
             }

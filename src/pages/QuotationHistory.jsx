@@ -478,6 +478,7 @@ export default function QuotationHistory() {
                     total={convertingQuotation.total}
                     currencySymbol={currencySymbol}
                     isProcessing={isSaving}
+                    branchId={convertingQuotation.branch_id}
                     initialCustomer={convertingQuotation.customers ? {
                         id: convertingQuotation.customer_id,
                         name: convertingQuotation.customers.name,

@@ -336,8 +336,14 @@ export default function Layout() {
                                     <select 
                                         className="branch-select"
                                         value={selectedBranchId || ''}
-                                        onChange={(e) => setSelectedBranchId(Number(e.target.value))}
+                                        onChange={(e) => {
+                                            const val = e.target.value
+                                            setSelectedBranchId(val === 'all' ? 'all' : Number(val))
+                                        }}
                                     >
+                                        {userRole === 'Administrador' && branches.length > 1 && (
+                                            <option value="all">Todas las sucursales</option>
+                                        )}
                                         {branches.map(b => (
                                             <option key={b.id} value={b.id}>{b.name}</option>
                                         ))}

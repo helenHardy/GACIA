@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Save, AlertCircle, Loader2, Phone, Mail, MapPin, DollarSign } from 'lucide-react'
+import { X, Save, AlertCircle, Loader2, Phone, Mail, MapPin } from 'lucide-react'
 
 export default function CustomerModal({ customer, onClose, onSave, isSaving }) {
     const [formData, setFormData] = useState({
@@ -8,7 +8,6 @@ export default function CustomerModal({ customer, onClose, onSave, isSaving }) {
         phone: '',
         address: '',
         tax_id: '',
-        credit_limit: 0,
         active: true
     })
     const [error, setError] = useState(null)
@@ -22,7 +21,6 @@ export default function CustomerModal({ customer, onClose, onSave, isSaving }) {
                 phone: customer.phone || '',
                 address: customer.address || '',
                 tax_id: customer.tax_id || '',
-                credit_limit: customer.credit_limit || 0,
                 active: customer.active !== undefined ? customer.active : true
             })
         }
@@ -32,7 +30,7 @@ export default function CustomerModal({ customer, onClose, onSave, isSaving }) {
         const { name, value, type, checked } = e.target
         setFormData(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : (name === 'credit_limit' ? parseFloat(value) || 0 : value)
+            [name]: type === 'checkbox' ? checked : value
         }))
     }
 
@@ -123,20 +121,6 @@ export default function CustomerModal({ customer, onClose, onSave, isSaving }) {
                             />
                         </div>
 
-                        <div>
-                            <label style={{ fontSize: '0.875rem', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>Límite de Crédito ($)</label>
-                            <div style={{ position: 'relative' }}>
-                                <DollarSign size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--secondary-foreground))' }} />
-                                <input
-                                    type="number"
-                                    name="credit_limit"
-                                    value={formData.credit_limit}
-                                    onChange={handleChange}
-                                    className="btn"
-                                    style={{ width: '100%', paddingLeft: '2.5rem', justifyContent: 'flex-start', backgroundColor: 'hsl(var(--secondary))', cursor: 'text' }}
-                                />
-                            </div>
-                        </div>
 
                         <div>
                             <label style={{ fontSize: '0.875rem', fontWeight: '600', display: 'block', marginBottom: '0.5rem' }}>Teléfono</label>

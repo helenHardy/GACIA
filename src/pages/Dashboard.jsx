@@ -3,6 +3,7 @@ import { TrendingUp, Users, Package, DollarSign, RefreshCw, Clock, Plus, Shoppin
 import { supabase } from '../lib/supabase'
 import SalesChart from '../components/dashboard/SalesChart'
 import { useNavigate } from 'react-router-dom'
+import { useBranch } from '../context/BranchContext'
 
 const StatCard = ({ title, value, icon, trend, loading, colorClass, gradient }) => (
     <div className="card" style={{
@@ -109,12 +110,18 @@ export default function Dashboard() {
     const [dailySales, setDailySales] = useState([])
     const [loading, setLoading] = useState(true)
 
-    const [branches, setBranches] = useState([])
-    const [selectedBranchId, setSelectedBranchId] = useState('all')
+    const { branches, selectedBranchId, setSelectedBranchId } = useBranch()
     const [isAdmin, setIsAdmin] = useState(false)
 
     useEffect(() => {
-        fetchBranches()
+        const checkAdmin = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+                setIsAdmin(profile?.role === 'Administrador')
+            }
+        }
+        checkAdmin()
     }, [])
 
     useEffect(() => {
@@ -123,44 +130,6 @@ export default function Dashboard() {
         }
     }, [selectedBranchId])
 
-    async function fetchBranches() {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return
-
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            const isUserAdmin = profile?.role === 'Administrador'
-            setIsAdmin(isUserAdmin)
-
-            let query = supabase.from('branches').select('*').eq('active', true).order('name')
-
-            if (!isUserAdmin) {
-                const { data: assignments } = await supabase.from('user_branches').select('branch_id').eq('user_id', user.id)
-                const assignedIds = assignments?.map(a => a.branch_id) || []
-
-                if (assignedIds.length > 0) {
-                    query = query.in('id', assignedIds)
-                } else {
-                    setBranches([])
-                    return
-                }
-            }
-
-            const { data } = await query
-            setBranches(data || [])
-
-            // Set default selection
-            if (data && data.length > 0) {
-                if (selectedBranchId === 'all' && !isUserAdmin) {
-                    setSelectedBranchId(data[0].id)
-                } else if (!selectedBranchId || (selectedBranchId !== 'all' && !data.find(b => b.id === selectedBranchId))) {
-                    setSelectedBranchId(data[0].id)
-                }
-            }
-        } catch (err) {
-            console.error('Error fetching branches:', err)
-        }
-    }
 
     async function fetchDashboardData() {
         try {
@@ -315,10 +284,13 @@ export default function Dashboard() {
                         <select
                             disabled={branches.length <= 1 && !isAdmin}
                             style={{ border: 'none', background: 'transparent', outline: 'none', fontWeight: '600', fontSize: '0.9rem', padding: '0.5rem 0', minWidth: '150px' }}
-                            value={selectedBranchId}
-                            onChange={(e) => setSelectedBranchId(e.target.value)}
+                            value={selectedBranchId || ''}
+                            onChange={(e) => {
+                                const val = e.target.value
+                                setSelectedBranchId(val === 'all' ? 'all' : Number(val))
+                            }}
                         >
-                            {isAdmin && <option value="all">Todas las Sucursales</option>}
+                            {isAdmin && branches.length > 1 && <option value="all">Todas las Sucursales</option>}
                             {branches.map(b => (
                                 <option key={b.id} value={b.id}>{b.name}</option>
                             ))}

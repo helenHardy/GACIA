@@ -63,13 +63,46 @@ export default function Sales() {
         const handleTicketEvent = (e) => handlePrint(e.detail)
         window.addEventListener('print-ticket', handleTicketEvent)
         return () => window.removeEventListener('print-ticket', handleTicketEvent)
-    }, [])
+    }, [selectedBranchId])
 
     async function checkUserRole() {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
             const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
             setIsAdmin(data?.role === 'Administrador')
+        }
+    }
+
+    async function fetchSellers() {
+        try {
+            let sellersData = []
+            if (selectedBranchId && selectedBranchId !== 'all') {
+                const { data: assignments } = await supabase
+                    .from('user_branches')
+                    .select('user_id')
+                    .eq('branch_id', selectedBranchId)
+                
+                const userIds = assignments?.map(a => a.user_id) || []
+                
+                if (userIds.length > 0) {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, role')
+                        .in('id', userIds)
+                        .in('role', ['Administrador', 'Cajero', 'Vendedor'])
+                    sellersData = data || []
+                }
+            } else {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, role')
+                    .in('role', ['Administrador', 'Cajero', 'Vendedor'])
+                sellersData = data || []
+            }
+
+            setSellers(sellersData.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')))
+        } catch (err) {
+            console.error('Error fetching sellers:', err)
         }
     }
 
@@ -93,14 +126,6 @@ export default function Sales() {
         }
     }
 
-    async function fetchSellers() {
-        try {
-            const { data } = await supabase.from('profiles').select('id, full_name').order('full_name')
-            setSellers(data || [])
-        } catch (err) {
-            console.error('Error fetching sellers:', err)
-        }
-    }
 
     async function fetchSales() {
         try {

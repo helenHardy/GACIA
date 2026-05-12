@@ -44,15 +44,43 @@ export default function Reports() {
 
     useEffect(() => {
         fetchSellers()
-    }, [])
+    }, [selectedBranchId])
 
     useEffect(() => {
         fetchData()
     }, [activeTab, period, startDate, endDate, selectedBranchId, selectedSellerId])
 
     async function fetchSellers() {
-        const { data } = await supabase.from('profiles').select('id, full_name').order('full_name')
-        setSellers(data || [])
+        try {
+            let sellersData = []
+            if (selectedBranchId && selectedBranchId !== 'all') {
+                const { data: assignments } = await supabase
+                    .from('user_branches')
+                    .select('user_id')
+                    .eq('branch_id', selectedBranchId)
+                
+                const userIds = assignments?.map(a => a.user_id) || []
+                
+                if (userIds.length > 0) {
+                    const { data } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, role')
+                        .in('id', userIds)
+                        .in('role', ['Administrador', 'Cajero', 'Vendedor'])
+                    sellersData = data || []
+                }
+            } else {
+                const { data } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, role')
+                    .in('role', ['Administrador', 'Cajero', 'Vendedor'])
+                sellersData = data || []
+            }
+
+            setSellers(sellersData.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')))
+        } catch (err) {
+            console.error('Error fetching sellers:', err)
+        }
     }
 
     async function fetchData() {
@@ -279,7 +307,12 @@ export default function Reports() {
                 query = query.gte('sale.created_at', start.toISOString()).lte('sale.created_at', end.toISOString())
             }
 
-            if (selectedBranchId && selectedBranchId !== 'all') {
+            if (selectedBranchId === 'all') {
+                const branchIds = branches.map(b => b.id)
+                if (branchIds.length > 0) {
+                    query = query.in('sale.branch_id', branchIds)
+                }
+            } else if (selectedBranchId) {
                 query = query.eq('sale.branch_id', selectedBranchId)
             }
 
@@ -327,7 +360,12 @@ export default function Reports() {
                 query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
             }
 
-            if (selectedBranchId && selectedBranchId !== 'all') {
+            if (selectedBranchId === 'all') {
+                const branchIds = branches.map(b => b.id)
+                if (branchIds.length > 0) {
+                    query = query.in('branch_id', branchIds)
+                }
+            } else if (selectedBranchId) {
                 query = query.eq('branch_id', selectedBranchId)
             }
 
