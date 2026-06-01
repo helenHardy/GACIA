@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { X, Banknote, QrCode, CheckCircle, RefreshCw, User, HandCoins, Search, ChevronDown, Wallet, ArrowRight, UserPlus, Info, Split, Tag, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-export default function CheckoutModal({ total, onClose, onConfirm, isProcessing, currencySymbol = 'Bs.', initialCustomer = null, branchId }) {
+export default function CheckoutModal({ total, onClose, onConfirm, isProcessing, currencySymbol = 'Bs.', initialCustomer = null, branchId, inline = false }) {
     const [paymentMethod, setPaymentMethod] = useState('Efectivo')
     const [amountPaid, setAmountPaid] = useState('')
     const [customers, setCustomers] = useState([])
@@ -21,6 +21,7 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
 
     // Mixed payment states
     const [amountCash, setAmountCash] = useState('')
+    const [amountQr, setAmountQr] = useState('')
     const [secondaryMethod, setSecondaryMethod] = useState('QR') // QR or Digital
     const [notes, setNotes] = useState('')
 
@@ -59,9 +60,10 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
             setCustomers(customersRes.data || [])
             setSellers(sellersData.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '')))
             
-            if (userRes.data?.user) {
-                setSelectedSellerId(userRes.data.user.id)
-            }
+            // Comentado para forzar la selección manual del cajero
+            // if (userRes.data?.user) {
+            //     setSelectedSellerId(userRes.data.user.id)
+            // }
         }
         fetchData()
     }, [branchId])
@@ -77,9 +79,40 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
 
     // Mixed payment calculations
     const cashVal = parseFloat(amountCash) || 0
-    const digitalVal = Math.max(0, total - cashVal).toFixed(2)
+    const digitalVal = parseFloat(amountQr) || 0
+
+    const handleCashChange = (e) => {
+        let val = e.target.value;
+        let numVal = parseFloat(val) || 0;
+        
+        if (numVal > total) {
+            numVal = total;
+            val = total.toString();
+        }
+
+        setAmountCash(val);
+        setAmountQr((total - numVal).toFixed(2));
+    }
+
+    const handleQrChange = (e) => {
+        let val = e.target.value;
+        let numVal = parseFloat(val) || 0;
+        
+        if (numVal > total) {
+            numVal = total;
+            val = total.toString();
+        }
+
+        setAmountQr(val);
+        setAmountCash((total - numVal).toFixed(2));
+    }
 
     const handleConfirm = () => {
+        if (!selectedSellerId) {
+            alert('Por favor, seleccione un Cajero / Vendedor antes de cobrar.')
+            return
+        }
+
         if (paymentMethod === 'Crédito' && !selectedCustomer) {
             alert('Debe seleccionar un cliente para ventas a crédito')
             return
@@ -90,8 +123,8 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
         let finalChange = parseFloat(change)
 
         if (paymentMethod === 'Mixto') {
-            finalPaymentMethod = `Mixto (Efectivo: ${cashVal.toFixed(2)} + ${secondaryMethod}: ${digitalVal})`
-            finalAmountReceived = finalTotal // Sum is always total for pure mixed entry unless we allow overpayment in cash
+            finalPaymentMethod = `Mixto (Efectivo: ${cashVal.toFixed(2)} + ${secondaryMethod}: ${digitalVal.toFixed(2)})`
+            finalAmountReceived = cashVal + digitalVal // Sum is total for mixed entry unless overpayment in cash
         }
 
         onConfirm({
@@ -102,6 +135,7 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
             customerId: selectedCustomer?.id || null,
             customer: selectedCustomer,
             sellerId: selectedSellerId,
+            seller: sellers.find(s => s.id === selectedSellerId),
             isCredit: paymentMethod === 'Crédito',
             notes: notes
         })
@@ -147,9 +181,17 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
         }
     }
 
+    const containerStyle = inline 
+        ? { width: '100%', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1rem 0', zIndex: 10 }
+        : { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '2rem' };
+
+    const cardStyle = inline
+        ? { backgroundColor: 'white', padding: 0, borderRadius: '24px', width: '100%', overflow: 'hidden', display: 'flex', border: '1px solid hsl(var(--border) / 0.6)' }
+        : { backgroundColor: 'white', padding: 0, borderRadius: '32px', maxWidth: '1150px', width: '100%', maxHeight: '92vh', overflow: 'hidden', display: 'flex', border: 'none' };
+
     return (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '2rem' }}>
-            <div className="card shadow-2xl animate-in zoom-in-95 duration-200" style={{ backgroundColor: 'white', padding: 0, borderRadius: '32px', maxWidth: '1150px', width: '100%', maxHeight: '92vh', overflow: 'hidden', display: 'flex', border: 'none' }}>
+        <div style={containerStyle}>
+            <div className={`card ${inline ? 'shadow-lg' : 'shadow-2xl animate-in zoom-in-95 duration-200'}`} style={cardStyle}>
                 {/* Left Panel - Summary & Methods */}
                 <div style={{ flex: '1 1 40%', padding: '2rem', borderRight: '1px solid hsl(var(--border) / 0.4)', backgroundColor: 'hsl(var(--secondary) / 0.05)', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
@@ -470,22 +512,22 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                             <input
                                                 type="number"
                                                 value={amountCash}
-                                                onChange={e => setAmountCash(e.target.value)}
+                                                onChange={handleCashChange}
                                                 style={{ width: '100%', padding: '0.6rem', fontSize: '1rem', fontWeight: '800', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.6)' }}
                                             />
                                         </div>
                                         <div>
                                             <label style={{ fontSize: '0.75rem', fontWeight: '800', opacity: 0.5, display: 'block', marginBottom: '0.35rem' }}>QR</label>
                                             <input
-                                                type="text"
-                                                readOnly
-                                                value={digitalVal}
-                                                style={{ width: '100%', padding: '0.6rem', fontSize: '1rem', fontWeight: '800', borderRadius: '10px', backgroundColor: 'hsl(var(--secondary) / 0.2)', border: '1px solid hsl(var(--border) / 0.4)' }}
+                                                type="number"
+                                                value={amountQr}
+                                                onChange={handleQrChange}
+                                                style={{ width: '100%', padding: '0.6rem', fontSize: '1rem', fontWeight: '800', borderRadius: '10px', border: '1px solid hsl(var(--border) / 0.6)' }}
                                             />
                                         </div>
                                     </div>
                                     <div style={{ padding: '0.6rem', backgroundColor: 'hsl(var(--primary) / 0.05)', borderRadius: '10px', textAlign: 'center' }}>
-                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '700', opacity: 0.6 }}>Total Cubierto: <span style={{ color: 'hsl(var(--primary))' }}>{currencySymbol}{total.toFixed(2)}</span></p>
+                                        <p style={{ margin: 0, fontSize: '0.75rem', fontWeight: '700', opacity: 0.6 }}>Total Cubierto: <span style={{ color: 'hsl(var(--primary))' }}>{currencySymbol}{(cashVal + digitalVal).toFixed(2)}</span></p>
                                     </div>
                                 </div>
                             )}

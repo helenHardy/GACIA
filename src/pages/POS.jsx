@@ -6,6 +6,7 @@ import Cart from '../components/pos/Cart'
 import CheckoutModal from '../components/pos/CheckoutModal'
 import Ticket from '../components/pos/Ticket'
 import { useBranch } from '../context/BranchContext'
+import html2pdf from 'html2pdf.js'
 
 export default function POS() {
     const [cart, setCart] = useState([])
@@ -209,6 +210,7 @@ export default function POS() {
                 items: [...cart], 
                 branch: branches.find(b => Number(b.id) === branchIdNum), 
                 customer: checkoutData?.customer || null, 
+                seller: checkoutData?.seller || null,
                 paymentMethod: checkoutData?.paymentMethod, 
                 currencySymbol 
             })
@@ -231,6 +233,20 @@ export default function POS() {
         printWindow.document.close()
     }
 
+    const handleDownloadPdf = () => {
+        if (!ticketRef.current) return;
+        
+        const opt = {
+            margin:       [5, 5, 5, 5],
+            filename:     `Comprobante_${lastSale?.sale?.sale_number || 'venta'}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(ticketRef.current).save();
+    }
+
     const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
     const total = taxSettings.enable_tax ? (subtotal * (1 + (taxSettings.tax_rate / 100))) : subtotal
 
@@ -244,16 +260,7 @@ export default function POS() {
             maxWidth: '1200px',
             margin: '0 auto'
         }}>
-            {isCheckoutOpen && (
-                <CheckoutModal
-                    total={total}
-                    isProcessing={isProcessing}
-                    currencySymbol={currencySymbol}
-                    branchId={selectedBranchId}
-                    onClose={() => setIsCheckoutOpen(false)}
-                    onConfirm={handleCheckout}
-                />
-            )}
+
 
             {showTicket && lastSale && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(15px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '1rem' }}>
@@ -296,7 +303,7 @@ export default function POS() {
                             <button 
                                 className="btn-hover" 
                                 style={{ padding: '0.85rem', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', fontWeight: '800', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }} 
-                                onClick={handlePrint}
+                                onClick={handleDownloadPdf}
                             >
                                 <Printer size={18} /> PDF
                             </button>
@@ -530,28 +537,21 @@ export default function POS() {
                                 <p style={{ margin: 0, fontSize: '2rem', fontWeight: '900', color: 'hsl(var(--primary))', letterSpacing: '-0.03em' }}>{currencySymbol}{total.toFixed(2)}</p>
                             </div>
                         </div>
-
-                        <button
-                            className="btn btn-primary"
-                            style={{ 
-                                padding: '1.25rem 3rem', 
-                                borderRadius: '20px', 
-                                fontSize: '1.25rem', 
-                                fontWeight: '900', 
-                                boxShadow: '0 10px 25px -5px rgb(var(--primary) / 0.4)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '1rem',
-                                transition: '0.3s'
-                            }}
-                            onClick={() => setIsCheckoutOpen(true)}
-                            disabled={cart.length === 0 || isProcessing}
-                        >
-                            {isProcessing ? <RefreshCw className="animate-spin" /> : <><Wallet size={28} /> COBRAR ORDEN</>}
-                        </button>
                     </div>
                 </div>
             </div>
+
+            {cart.length > 0 && (
+                <CheckoutModal
+                    inline={true}
+                    total={total}
+                    isProcessing={isProcessing}
+                    currencySymbol={currencySymbol}
+                    branchId={selectedBranchId}
+                    onClose={() => setCart([])}
+                    onConfirm={handleCheckout}
+                />
+            )}
         </div>
     )
 }

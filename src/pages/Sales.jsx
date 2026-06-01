@@ -1,11 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Plus, Search, ClipboardList, RefreshCw, AlertTriangle, Building2, Calendar, User, Eye, Edit2, Trash2, ShoppingCart, TrendingUp, DollarSign, Target, Filter, ChevronRight, X, Printer, Download, Tag, HandCoins, Save } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { Calendar, Search, Filter, ArrowRight, TrendingUp, DollarSign, Package, CreditCard, ChevronDown, CheckCircle, FileText, Download, Printer, User, Building2, ShoppingCart, Tag, Clock, RefreshCw, AlertTriangle, Wallet, ArrowDownRight, ArrowUpRight, ClipboardList, Eye, Trash2, Edit2, History, Check, X, ShieldAlert, FileSearch, Banknote, HandCoins, Save } from 'lucide-react'
 import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import SaleModal from '../components/pos/SaleModal'
 import EditSaleModal from '../components/pos/EditSaleModal'
 import Ticket from '../components/pos/Ticket'
 import { useBranch } from '../context/BranchContext'
+import html2pdf from 'html2pdf.js'
 
 
 export default function Sales() {
@@ -51,7 +52,15 @@ export default function Sales() {
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     }
 
-
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                if (selectedSaleForDetail) setSelectedSaleForDetail(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedSaleForDetail]);
 
     useEffect(() => {
         checkUserRole()
@@ -114,8 +123,6 @@ export default function Sales() {
         localStorage.setItem('sales_mode', filterMode)
     }, [filterMode])
 
-
-
     async function fetchSettings() {
         const { data } = await supabase.from('settings').select('*')
         if (data) {
@@ -125,7 +132,6 @@ export default function Sales() {
             else if (currency === 'USD') setCurrencySymbol('$')
         }
     }
-
 
     async function fetchSales() {
         try {
@@ -216,8 +222,6 @@ export default function Sales() {
         }
     }
 
-
-
     const handleRegisterPayment = async () => {
         const isMixto = paymentMethod === 'Mixto'
         const totalAmount = isMixto ? (parseFloat(cashAmount || 0) + parseFloat(qrAmount || 0)) : parseFloat(paymentAmount || 0)
@@ -292,7 +296,6 @@ export default function Sales() {
         }
     }
 
-
     const handlePrint = async (sale) => {
         try {
             setLoading(true)
@@ -309,6 +312,7 @@ export default function Sales() {
                 items: formattedItems,
                 branch: sale.branches,
                 customer: sale.customers,
+                seller: sale.profiles,
                 paymentMethod: sale.payment_method,
                 currencySymbol
             }
@@ -321,15 +325,55 @@ export default function Sales() {
                 const printWindow = window.open('', '_blank', 'width=800,height=600')
                 printWindow.document.write(`<html><head><title>Ticket #${sale.sale_number}</title><style>body{margin:0;padding:0;}</style></head><body>${printArea}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}</script></body></html>`)
                 printWindow.document.close()
+                setLoading(false)
             }, 100)
         } catch (err) {
             console.error(err)
             alert('Error al generar ticket')
-        } finally {
             setLoading(false)
         }
     }
 
+    const handleDownloadPdf = async (sale) => {
+        try {
+            setLoading(true)
+            const { data: items } = await supabase.from('sale_items').select('*, products(name, sku)').eq('sale_id', sale.id)
+
+            const formattedItems = items.map(i => ({
+                ...i,
+                name: i.products?.name,
+                sku: i.products?.sku
+            }))
+
+            const ticketData = {
+                sale: sale,
+                items: formattedItems,
+                branch: sale.branches,
+                customer: sale.customers,
+                seller: sale.profiles,
+                paymentMethod: sale.payment_method,
+                currencySymbol
+            }
+
+            setSaleForTicket(ticketData)
+
+            setTimeout(() => {
+                if (!ticketRef.current) return;
+                const opt = {
+                    margin:       [5, 5, 5, 5],
+                    filename:     `Comprobante_${sale.sale_number || 'venta'}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(ticketRef.current).save().then(() => setLoading(false));
+            }, 100)
+        } catch (err) {
+            console.error(err)
+            alert('Error generando PDF')
+            setLoading(false)
+        }
+    }
 
     const handleExportCSV = () => {
         try {
@@ -1119,6 +1163,14 @@ export default function Sales() {
                                                         <HandCoins size={14} />
                                                     </button>
                                                 )}
+                                                <button 
+                                                    onClick={() => handleDownloadPdf(s)} 
+                                                    className="btn" 
+                                                    style={{ padding: '0.35rem', borderRadius: '8px', backgroundColor: 'hsl(0 100% 95%)', color: '#ef4444' }} 
+                                                    title="Descargar PDF"
+                                                >
+                                                    <FileText size={14} />
+                                                </button>
                                                 <button onClick={() => handlePrint(s)} className="btn" style={{ padding: '0.35rem', borderRadius: '8px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--foreground))' }} title="Imprimir Ticket"><Printer size={14} /></button>
                                                 <button onClick={() => setSelectedSaleForDetail(s)} className="btn" style={{ padding: '0.35rem', borderRadius: '8px', backgroundColor: 'hsl(var(--secondary) / 0.5)', color: 'hsl(var(--primary))' }} title="Ver Detalles"><Eye size={14} /></button>
                                                 {(isAdmin || s.can_void) && (
@@ -1389,11 +1441,11 @@ export default function Sales() {
 
             {/* Modal de Detalle de Venta (Imagen 4) */}
             {selectedSaleForDetail && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '2rem' }}>
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '2rem' }}>
                     <div className="card shadow-2xl" style={{ backgroundColor: 'white', padding: 0, borderRadius: '24px', maxWidth: '1000px', width: '100%', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', border: 'none' }}>
                         {/* Header Section */}
-                        <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative' }}>
-                            <div style={{ display: 'flex', gap: '1.5rem' }}>
+                        <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
+                            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
                                 <div>
                                     <p style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', margin: '0 0 2px 0', textTransform: 'uppercase' }}>TICKET</p>
                                     <h3 style={{ fontSize: '1rem', fontWeight: '900', color: 'hsl(217 91% 60%)', margin: 0 }}>#{selectedSaleForDetail.sale_number}</h3>
@@ -1411,15 +1463,7 @@ export default function Sales() {
                                     <h3 style={{ fontSize: '0.9rem', fontWeight: '800', color: '#64748b', margin: 0 }}>{new Date(selectedSaleForDetail.created_at).toLocaleDateString()}</h3>
                                 </div>
                             </div>
-                            <div style={{ textAlign: 'right' }}>
-                                <p style={{ fontSize: '0.6rem', fontWeight: '800', color: '#94a3b8', margin: '0 0 2px 0', textTransform: 'uppercase' }}>TOTAL</p>
-                                <h2 style={{ fontSize: '1.75rem', fontWeight: '900', color: 'hsl(217 91% 60%)', margin: 0, lineHeight: 1 }}>{currencySymbol}{selectedSaleForDetail.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
-                                {selectedSaleForDetail.is_credit && (
-                                    <p style={{ fontSize: '0.85rem', fontWeight: '900', color: '#ef4444', margin: '4px 0 0 0' }}>
-                                        Saldo Pendiente: {currencySymbol}{(selectedSaleForDetail.total - (selectedSaleForDetail.customer_payments?.reduce((acc, p) => acc + p.amount, 0) || 0)).toFixed(2)}
-                                    </p>
-                                )}
-                            </div>
+                            {/* Total removido de aquí a pedido del usuario */}
                             <button onClick={() => setSelectedSaleForDetail(null)} className="btn" style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', opacity: 0.3 }}><X size={20} /></button>
                         </div>
 
@@ -1450,15 +1494,28 @@ export default function Sales() {
                                 </tbody>
                             </table>
 
-                            {/* Notas de la Venta */}
-                            {selectedSaleForDetail.notes && (
-                                <div style={{ marginBottom: '2rem', padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderRadius: '16px', border: '1px solid hsl(var(--border) / 0.4)' }}>
-                                    <h4 style={{ fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <ClipboardList size={14} /> Notas / Observaciones
-                                    </h4>
-                                    <p style={{ fontSize: '0.95rem', fontWeight: '600', color: '#334155', margin: 0, whiteSpace: 'pre-wrap' }}>{selectedSaleForDetail.notes}</p>
+                            {/* Summary Section (Notas + Totales) */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', gap: '2rem' }}>
+                                <div style={{ flex: 1 }}>
+                                    {selectedSaleForDetail.notes && (
+                                        <div style={{ padding: '1.25rem', backgroundColor: 'hsl(var(--secondary) / 0.1)', borderRadius: '16px', border: '1px solid hsl(var(--border) / 0.4)' }}>
+                                            <h4 style={{ fontSize: '0.7rem', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <ClipboardList size={14} /> Notas / Observaciones
+                                            </h4>
+                                            <p style={{ fontSize: '0.95rem', fontWeight: '600', color: '#334155', margin: 0, whiteSpace: 'pre-wrap' }}>{selectedSaleForDetail.notes}</p>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                                <div style={{ textAlign: 'right', minWidth: '200px' }}>
+                                    <p style={{ fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', margin: '0 0 4px 0', textTransform: 'uppercase' }}>TOTAL</p>
+                                    <h2 style={{ fontSize: '2rem', fontWeight: '900', color: 'hsl(217 91% 60%)', margin: 0, lineHeight: 1 }}>{currencySymbol}{selectedSaleForDetail.total?.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h2>
+                                    {selectedSaleForDetail.is_credit && (
+                                        <p style={{ fontSize: '0.9rem', fontWeight: '900', color: '#ef4444', margin: '8px 0 0 0' }}>
+                                            Saldo Pendiente: {currencySymbol}{(selectedSaleForDetail.total - (selectedSaleForDetail.customer_payments?.reduce((acc, p) => acc + p.amount, 0) || 0)).toFixed(2)}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
 
                             {/* Action Buttons */}
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginBottom: '2rem' }}>
@@ -1471,6 +1528,13 @@ export default function Sales() {
                                         <HandCoins size={18} /> Registrar Pago
                                     </button>
                                 )}
+                                <button 
+                                    onClick={() => handleDownloadPdf(selectedSaleForDetail)} 
+                                    className="btn" 
+                                    style={{ backgroundColor: 'hsl(0 100% 95%)', color: '#ef4444', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                >
+                                    <FileText size={18} /> Descargar PDF
+                                </button>
                                 <button onClick={() => handlePrint(selectedSaleForDetail)} className="btn" style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <Printer size={18} /> Re-imprimir Ticket
                                 </button>
