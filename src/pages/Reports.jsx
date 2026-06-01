@@ -323,8 +323,30 @@ export default function Reports() {
             const { data, error } = await query
             if (error) throw error
 
-            // Group and format
-            setSoldProducts(data || [])
+            // Group by product_id (SKU) - sum quantities and totals
+            const grouped = {}
+            ;(data || []).forEach(item => {
+                const key = item.product_id
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        product_id: key,
+                        product: item.product,
+                        quantity: 0,
+                        total: 0,
+                        price: Number(item.price)
+                    }
+                }
+                grouped[key].quantity += Number(item.quantity)
+                grouped[key].total += Number(item.total)
+            })
+
+            const groupedArray = Object.values(grouped).sort((a, b) => {
+                const skuA = a.product?.sku || ''
+                const skuB = b.product?.sku || ''
+                return skuA.localeCompare(skuB)
+            })
+
+            setSoldProducts(groupedArray)
         } catch (err) {
             console.error('Error fetching sold products:', err)
         } finally {
@@ -613,7 +635,7 @@ export default function Reports() {
                     <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid #eee', backgroundColor: '#f8f9fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: 'hsl(var(--primary))' }}>Resumen de Productos Vendidos</h3>
-                            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.5 }}>Desglose detallado por ítem</p>
+                            <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.5 }}>Agrupado por producto (SKU)</p>
                         </div>
                         <button 
                             onClick={handlePrintSalesReport}
@@ -657,7 +679,7 @@ export default function Reports() {
                                     <tr><td colSpan="7" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>No hay ventas registradas</td></tr>
                                 ) : (
                                     soldProducts.map((item, index) => (
-                                        <tr key={item.id} style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)' }}>
+                                        <tr key={item.product_id || index} style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)' }}>
                                             <td style={{ padding: '1rem', fontWeight: '600', opacity: 0.4 }}>{index + 1}</td>
                                             <td style={{ padding: '1rem' }}>
                                                 <span style={{ fontSize: '0.85rem', fontWeight: '700', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '2px 8px', borderRadius: '6px' }}>{item.product?.sku || 'N/A'}</span>
