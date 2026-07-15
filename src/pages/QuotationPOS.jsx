@@ -197,7 +197,7 @@ export default function QuotationPOS() {
                 <body>
                     <div class="header">
                         <div class="company-info">
-                            <h1>Gacia Store</h1>
+                            <h1>${branch?.name || 'Gacia Store'}</h1>
                             <p>${branch?.name || 'Sucursal Principal'}</p>
                             <p>Cotización Generada por Sistema</p>
                         </div>

@@ -255,7 +255,7 @@ export default function QuotationHistory() {
                 <body>
                     <div class="header">
                         <div class="company-info">
-                            <h1>Gacia Store</h1>
+                            <h1>${quotation.branches?.name || 'Gacia Store'}</h1>
                             <p>Av. Principal #123, Ciudad</p>
                             <p>Tel: (555) 123-4567 | info@gaciastore.com</p>
                         </div>

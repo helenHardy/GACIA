@@ -191,7 +191,7 @@ const Ticket = forwardRef(({ sale, items, branch, customer, seller, paymentMetho
             <div style={{ display: 'flex', position: 'relative', width: '100%', marginBottom: '25px', alignItems: 'center', minHeight: '40px' }}>
                 <div style={{ position: 'absolute', left: 0, display: 'flex', alignItems: 'center' }}>
                     <span style={{ fontSize: '32px', fontWeight: 'bold', color: 'black', fontFamily: "'Arial', sans-serif", lineHeight: 1 }}>
-                        GACIA
+                        {branch?.name || 'GACIA'}
                     </span>
                     <svg width="10" height="15" viewBox="0 0 10 15" style={{ marginLeft: '3px', marginTop: '-8px' }}>
                         <polygon points="0,15 10,0 5,0 0,10" fill="#d91c1c" />

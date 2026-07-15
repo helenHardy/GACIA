@@ -541,7 +541,6 @@ export default function Sales() {
 
         const paidAmount = s.customer_payments?.reduce((acc, p) => acc + (p.amount || 0), 0) || 0
         const isDebt = s.is_credit && (s.total - paidAmount > 0.01)
-        const matchesDebt = !filterOnlyDebts || isDebt
 
         let matchesTime = true
         if (filterMode === 'day') {
@@ -552,7 +551,8 @@ export default function Sales() {
             matchesTime = saleLocalDate >= filterStartDate && saleLocalDate <= filterEndDate
         }
 
-        return matchesSearch && matchesBranch && matchesTime && matchesSeller && matchesDebt
+        if (filterOnlyDebts) return isDebt
+        return matchesSearch && matchesBranch && matchesTime && matchesSeller
     })
 
     const filteredItems = saleItems.filter(item => {
@@ -1686,6 +1686,7 @@ export default function Sales() {
                         items={saleForTicket.items}
                         branch={saleForTicket.branch}
                         customer={saleForTicket.customer}
+                        seller={saleForTicket.seller}
                         paymentMethod={saleForTicket.paymentMethod}
                         currencySymbol={saleForTicket.currencySymbol}
                     />
