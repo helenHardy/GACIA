@@ -247,7 +247,7 @@ export default function Classifications() {
             } else {
                 const { data, error } = await supabase
                     .from('products')
-                    .insert([productData])
+                    .insert([{ ...productData, active: true }])
                     .select()
                 if (error) throw error
                 productId = data[0].id

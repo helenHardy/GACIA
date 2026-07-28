@@ -203,10 +203,10 @@ export default function Inventory() {
                 if (error) throw error
                 showToast('Producto actualizado correctamente')
             } else {
-                // Create product
+                // Create product (always active by default)
                 const { data, error } = await supabase
                     .from('products')
-                    .insert([productData])
+                    .insert([{ ...productData, active: true }])
                     .select()
                 if (error) throw error
                 productId = data[0].id
