@@ -414,4 +414,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ADMIN CHANGE USER PASSWORD FUNCTION
+CREATE OR REPLACE FUNCTION admin_change_user_password(target_user_id uuid, new_password text)
+RETURNS void AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'Administrador'
+    ) THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden cambiar contraseñas.';
+    END IF;
+
+    IF new_password IS NULL OR length(new_password) < 6 THEN
+        RAISE EXCEPTION 'La contraseña debe tener al menos 6 caracteres.';
+    END IF;
+
+    UPDATE auth.users
+    SET encrypted_password = crypt(new_password, gen_salt('bf'))
+    WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- END OF SCRIPT --

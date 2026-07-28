@@ -90,18 +90,65 @@ export default function Branches() {
         }
     }
 
-    const handleDelete = async (id) => {
-        if (!confirm('¿Estás seguro de que deseas eliminar esta sucursal?')) return
+    const handleDelete = async (branch) => {
         try {
-            const { error } = await supabase
-                .from('branches')
-                .delete()
-                .eq('id', id)
-            if (error) throw error
+            setLoading(true)
+
+            // 1. Verificar si tiene stock activo en algún producto
+            const { data: settingsData, error: sErr } = await supabase
+                .from('product_branch_settings')
+                .select('stock')
+                .eq('branch_id', branch.id)
+
+            if (sErr) throw sErr
+
+            const totalStock = settingsData?.reduce((acc, curr) => acc + (Number(curr.stock) || 0), 0) || 0
+
+            if (totalStock > 0) {
+                alert(`No se puede eliminar la sucursal "${branch.name}" porque todavía registra ${totalStock} unidades de productos en stock. Debes vaciar o traspasar el stock primero.`)
+                return
+            }
+
+            // 2. Verificar si tiene historial de ventas, compras o traspasos
+            const [salesRes, purchasesRes, transfersRes] = await Promise.all([
+                supabase.from('sales').select('id', { count: 'exact', head: true }).eq('branch_id', branch.id),
+                supabase.from('purchases').select('id', { count: 'exact', head: true }).eq('branch_id', branch.id),
+                supabase.from('transfers').select('id', { count: 'exact', head: true }).or(`origin_branch_id.eq.${branch.id},destination_branch_id.eq.${branch.id}`)
+            ])
+
+            const hasHistory = (salesRes.count || 0) + (purchasesRes.count || 0) + (transfersRes.count || 0) > 0
+
+            if (hasHistory) {
+                const des = confirm(`La sucursal "${branch.name}" ya no tiene stock, pero conserva un historial de operaciones pasadas (ventas/compras/traspasos).\n\nPara proteger la integridad de tus reportes contables pasados, el estándar del sistema es DESACTIVAR la sucursal.\n\n¿Deseas DESACTIVAR la sucursal ahora? (Dejará de aparecer en POS, compras e inventario activo).`)
+                if (des) {
+                    const { error } = await supabase
+                        .from('branches')
+                        .update({ active: false })
+                        .eq('id', branch.id)
+                    if (error) throw error
+                    alert(`Sucursal "${branch.name}" deshabilitada correctamente.`)
+                    fetchBranches()
+                }
+                return
+            }
+
+            // 3. Si no tiene historial operativo y su stock es 0:
+            // Limpiamos los registros de configuración vacíos (product_branch_settings y user_branches)
+            if (!confirm(`¿Estás seguro de eliminar permanentemente la sucursal "${branch.name}"?`)) return
+
+            await supabase.from('product_branch_settings').delete().eq('branch_id', branch.id)
+            await supabase.from('user_branches').delete().eq('branch_id', branch.id)
+
+            const { error: delError } = await supabase.from('branches').delete().eq('id', branch.id)
+            if (delError) throw delError
+
+            alert(`Sucursal "${branch.name}" eliminada correctamente.`)
             fetchBranches()
         } catch (err) {
-            console.error('Error deleting branch:', err)
-            alert('Error al eliminar la sucursal')
+            console.error('Error al eliminar la sucursal:', err)
+            alert('Error al eliminar la sucursal: ' + (err.message || 'No se pudo eliminar'))
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -251,7 +298,7 @@ export default function Branches() {
                                         <button
                                             className="btn"
                                             style={{ padding: '0.6rem', borderRadius: '10px', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))' }}
-                                            onClick={() => handleDelete(branch.id)}
+                                            onClick={() => handleDelete(branch)}
                                         >
                                             <Trash2 size={18} />
                                         </button>

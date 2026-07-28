@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, User, Mail, Shield, MoreVertical, RefreshCw, AlertTriangle, Edit2, Trash2, X, CheckCircle } from 'lucide-react'
+import { Plus, Search, User, Mail, Shield, MoreVertical, RefreshCw, AlertTriangle, Edit2, Trash2, X, CheckCircle, KeyRound, Lock, Copy, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import UserModal from '../components/users/UserModal'
 
@@ -17,6 +17,14 @@ export default function Users() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingUser, setEditingUser] = useState(null)
     const [isSaving, setIsSaving] = useState(false)
+
+    // Password Reset state
+    const [passwordModalUser, setPasswordModalUser] = useState(null)
+    const [newPassword, setNewPassword] = useState('')
+    const [confirmPassword, setConfirmPassword] = useState('')
+    const [isChangingPassword, setIsChangingPassword] = useState(false)
+    const [sqlModalOpen, setSqlModalOpen] = useState(false)
+    const [copiedSql, setCopiedSql] = useState(false)
 
     useEffect(() => {
         if (toast) {
@@ -72,6 +80,51 @@ export default function Users() {
         }
     }
 
+    const changeUserPassword = async (targetUserId, newPassword) => {
+        if (!newPassword || newPassword.length < 6) {
+            throw new Error('La contraseña debe tener al menos 6 caracteres.')
+        }
+
+        const { error } = await supabase.rpc('admin_change_user_password', {
+            target_user_id: targetUserId,
+            new_password: newPassword
+        })
+
+        if (error) {
+            if (error.code === 'PGRST202' || error.message?.includes('admin_change_user_password')) {
+                setSqlModalOpen(true)
+                throw new Error('Se requiere instalar una función SQL en Supabase para permitir a los administradores cambiar contraseñas.')
+            }
+            throw error
+        }
+    }
+
+    const handleResetPasswordSubmit = async (e) => {
+        e.preventDefault()
+        if (!newPassword || newPassword.length < 6) {
+            showToast('La contraseña debe tener al menos 6 caracteres', 'error')
+            return
+        }
+        if (newPassword !== confirmPassword) {
+            showToast('Las contraseñas no coinciden', 'error')
+            return
+        }
+
+        try {
+            setIsChangingPassword(true)
+            await changeUserPassword(passwordModalUser.id, newPassword)
+            showToast(`Contraseña actualizada para ${passwordModalUser.full_name || 'el usuario'}`)
+            setPasswordModalUser(null)
+            setNewPassword('')
+            setConfirmPassword('')
+        } catch (err) {
+            console.error('Error updating password:', err)
+            showToast(err.message, 'error')
+        } finally {
+            setIsChangingPassword(false)
+        }
+    }
+
     const handleSave = async (formData) => {
         try {
             setIsSaving(true)
@@ -90,7 +143,19 @@ export default function Users() {
 
                 if (error) throw error
                 userId = editingUser.id
-                showToast('Usuario actualizado correctamente')
+
+                // Si se proporcionó nueva contraseña al editar
+                if (formData.password && formData.password.trim().length >= 6) {
+                    try {
+                        await changeUserPassword(editingUser.id, formData.password.trim())
+                        showToast('Usuario y contraseña actualizados correctamente')
+                    } catch (passErr) {
+                        console.error('Error changing password:', passErr)
+                        showToast('Perfil actualizado pero falló el cambio de contraseña: ' + passErr.message, 'error')
+                    }
+                } else {
+                    showToast('Usuario actualizado correctamente')
+                }
             } else {
                 // Crear nuevo usuario (Auth + Perfil)
                 const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -100,7 +165,6 @@ export default function Users() {
                         data: {
                             full_name: formData.full_name,
                             role: formData.role
-                            // El trigger handle_new_user debería crear el perfil automáticamente
                         }
                     }
                 })
@@ -109,7 +173,6 @@ export default function Users() {
 
                 if (authData.user) {
                     userId = authData.user.id
-                    // Si el trigger no existiera o fallara, aquí podríamos insertar manualmente en profiles
                     const { error: profileError } = await supabase
                         .from('profiles')
                         .upsert({
@@ -136,7 +199,6 @@ export default function Users() {
 
                 if (deleteError) {
                     console.error('Error removing old assignments:', deleteError)
-                    // We don't throw here to avoid failing the whole user save, but might want to warn
                 }
 
                 // 2. Insert new assignments
@@ -451,6 +513,20 @@ export default function Users() {
                                                     className="btn"
                                                     style={{ padding: '0.5rem', borderRadius: '8px', color: 'hsl(var(--muted-foreground))', transition: 'all 0.2s', backgroundColor: 'transparent' }}
                                                     onClick={() => {
+                                                        setPasswordModalUser(user)
+                                                        setNewPassword('')
+                                                        setConfirmPassword('')
+                                                    }}
+                                                    title="Cambiar Contraseña"
+                                                    onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(38 92% 50%)'; e.currentTarget.style.backgroundColor = 'hsl(38 92% 50% / 0.1)' }}
+                                                    onMouseLeave={(e) => { e.currentTarget.style.color = 'hsl(var(--muted-foreground))'; e.currentTarget.style.backgroundColor = 'transparent' }}
+                                                >
+                                                    <KeyRound size={18} />
+                                                </button>
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '0.5rem', borderRadius: '8px', color: 'hsl(var(--muted-foreground))', transition: 'all 0.2s', backgroundColor: 'transparent' }}
+                                                    onClick={() => {
                                                         setEditingUser(user)
                                                         setIsModalOpen(true)
                                                     }}
@@ -490,6 +566,145 @@ export default function Users() {
                     }}
                     onSave={handleSave}
                 />
+            )}
+
+            {/* Change Password Modal */}
+            {passwordModalUser && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '1rem' }}>
+                    <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '440px', padding: '2rem', borderRadius: '24px', backgroundColor: 'hsl(var(--background))' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ padding: '0.6rem', backgroundColor: 'hsl(38 92% 50% / 0.1)', color: 'hsl(38 92% 50%)', borderRadius: '12px' }}>
+                                    <KeyRound size={22} />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0 }}>Cambiar Contraseña</h2>
+                                    <p style={{ fontSize: '0.8rem', color: 'hsl(var(--muted-foreground))', margin: 0 }}>{passwordModalUser.full_name || passwordModalUser.email}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setPasswordModalUser(null)} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}><X size={20} /></button>
+                        </div>
+
+                        <form onSubmit={handleResetPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.85rem' }}>Nueva Contraseña</label>
+                                <input
+                                    type="password"
+                                    required
+                                    autoFocus
+                                    placeholder="Mínimo 6 caracteres"
+                                    style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid hsl(var(--border))', fontSize: '1rem', fontFamily: 'monospace' }}
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600', fontSize: '0.85rem' }}>Confirmar Contraseña</label>
+                                <input
+                                    type="password"
+                                    required
+                                    placeholder="Repetir nueva contraseña"
+                                    style={{ width: '100%', padding: '0.85rem 1rem', borderRadius: '12px', border: '1px solid hsl(var(--border))', fontSize: '1rem', fontFamily: 'monospace' }}
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                />
+                            </div>
+
+                            <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.75rem' }}>
+                                <button type="button" onClick={() => setPasswordModalUser(null)} className="btn" style={{ flex: 1, padding: '0.85rem', borderRadius: '14px', fontWeight: '700' }}>Cancelar</button>
+                                <button
+                                    type="submit"
+                                    disabled={isChangingPassword}
+                                    className="btn btn-primary"
+                                    style={{ flex: 1, padding: '0.85rem', borderRadius: '14px', fontWeight: '800', display: 'flex', justifyContent: 'center', gap: '0.5rem', alignItems: 'center' }}
+                                >
+                                    {isChangingPassword ? <RefreshCw size={18} className="animate-spin" /> : <Lock size={18} />}
+                                    Guardar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* SQL Function Setup Helper Modal */}
+            {sqlModalOpen && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '1rem' }}>
+                    <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '600px', padding: '2rem', borderRadius: '24px', backgroundColor: 'hsl(var(--background))' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ padding: '0.6rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}>
+                                    <Shield size={24} />
+                                </div>
+                                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0 }}>Instalación de Función de Contraseñas</h2>
+                            </div>
+                            <button onClick={() => setSqlModalOpen(false)} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}><X size={20} /></button>
+                        </div>
+
+                        <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', marginBottom: '1rem', lineHeight: '1.5' }}>
+                            Para que el panel de administración pueda cambiar la contraseña de cualquier usuario en Supabase, ejecuta esta consulta **una sola vez** en el **SQL Editor** de tu panel de Supabase:
+                        </p>
+
+                        <div style={{ position: 'relative', backgroundColor: 'hsl(222 47% 11%)', color: '#e2e8f0', padding: '1rem', borderRadius: '12px', fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto', maxHeight: '200px', marginBottom: '1.5rem' }}>
+                            <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`CREATE OR REPLACE FUNCTION admin_change_user_password(target_user_id uuid, new_password text)
+RETURNS void AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'Administrador'
+    ) THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden cambiar contraseñas.';
+    END IF;
+
+    IF new_password IS NULL OR length(new_password) < 6 THEN
+        RAISE EXCEPTION 'La contraseña debe tener al menos 6 caracteres.';
+    END IF;
+
+    UPDATE auth.users
+    SET encrypted_password = crypt(new_password, gen_salt('bf'))
+    WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`}
+                            </pre>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`CREATE OR REPLACE FUNCTION admin_change_user_password(target_user_id uuid, new_password text)
+RETURNS void AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'Administrador'
+    ) THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden cambiar contraseñas.';
+    END IF;
+
+    IF new_password IS NULL OR length(new_password) < 6 THEN
+        RAISE EXCEPTION 'La contraseña debe tener al menos 6 caracteres.';
+    END IF;
+
+    UPDATE auth.users
+    SET encrypted_password = crypt(new_password, gen_salt('bf'))
+    WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;`)
+                                    setCopiedSql(true)
+                                    setTimeout(() => setCopiedSql(false), 2000)
+                                }}
+                                className="btn btn-primary"
+                                style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                            >
+                                {copiedSql ? <Check size={18} /> : <Copy size={18} />}
+                                {copiedSql ? '¡Copiado!' : 'Copiar Código SQL'}
+                            </button>
+                            <button onClick={() => setSqlModalOpen(false)} className="btn btn-secondary" style={{ padding: '0.75rem 1.5rem', borderRadius: '12px', fontWeight: '700' }}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             <style>{`

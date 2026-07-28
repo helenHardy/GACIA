@@ -160,27 +160,27 @@ export default function UserModal({ user, onClose, onSave, isSaving }) {
                             />
                         </div>
 
-                        {!user && (
-                            <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ fontSize: '0.875rem', fontWeight: '600', display: 'block', marginBottom: '0.5rem', color: 'hsl(var(--foreground))' }}>Contraseña</label>
-                                <input
-                                    required
-                                    type="password"
-                                    placeholder="Mínimo 6 caracteres"
-                                    className="btn"
-                                    style={{
-                                        width: '100%',
-                                        backgroundColor: 'hsl(var(--background))',
-                                        border: '1px solid hsl(var(--border))',
-                                        cursor: 'text',
-                                        justifyContent: 'flex-start',
-                                        fontFamily: 'monospace'
-                                    }}
-                                    value={formData.password}
-                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                />
-                            </div>
-                        )}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={{ fontSize: '0.875rem', fontWeight: '600', display: 'block', marginBottom: '0.5rem', color: 'hsl(var(--foreground))' }}>
+                                {user ? 'Nueva Contraseña (Opcional)' : 'Contraseña'}
+                            </label>
+                            <input
+                                required={!user}
+                                type="password"
+                                placeholder={user ? "Dejar en blanco para mantener la actual" : "Mínimo 6 caracteres"}
+                                className="btn"
+                                style={{
+                                    width: '100%',
+                                    backgroundColor: 'hsl(var(--background))',
+                                    border: '1px solid hsl(var(--border))',
+                                    cursor: 'text',
+                                    justifyContent: 'flex-start',
+                                    fontFamily: 'monospace'
+                                }}
+                                value={formData.password}
+                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                            />
+                        </div>
 
                         <div>
                             <label style={{ fontSize: '0.875rem', fontWeight: '600', display: 'block', marginBottom: '0.5rem', color: 'hsl(var(--foreground))' }}>Rol en el Sistema</label>
