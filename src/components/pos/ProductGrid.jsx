@@ -34,7 +34,7 @@ export default function ProductGrid({ searchTerm, branchId, brandId, modelId, on
                     settings:product_branch_settings!inner(*)
                 `)
                 .eq('settings.branch_id', branchId)
-                .eq('active', true)
+                .or('active.eq.true,active.is.null')
                 .order('name')
 
             if (error) throw error

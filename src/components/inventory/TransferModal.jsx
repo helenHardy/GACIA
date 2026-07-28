@@ -40,7 +40,7 @@ export default function TransferModal({ onClose, onSave, isSaving, initialData =
                 supabase.from('products').select(`
                     *,
                     brand:brands(name)
-                `).eq('active', true).order('name'),
+                `).or('active.eq.true,active.is.null').order('name'),
                 supabase.from('brands').select('*').order('name'),
                 supabase.from('models').select('*').order('name')
             ])

@@ -74,12 +74,12 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
         }
     }
 
-    // Solo cargar datos iniciales una vez al montar o si el objeto product cambia su identidad real (ID)
+    // Cargar datos iniciales al montar o al cambiar de producto/marca/modelo
     useEffect(() => {
         if (product) {
             setFormData(prev => {
-                // Si ya estamos editando algo y el producto es el mismo (mismo ID o ambos nuevos), no resetear
-                if (prev.id === product.id && (prev.name || prev.sku)) return prev;
+                // Si estamos editando exactamente el mismo producto existente (mismo ID), mantener estado previo
+                if (product.id && prev.id === product.id) return prev;
                 
                 return {
                     id: product.id || null,
@@ -98,7 +98,7 @@ export default function ProductModal({ product, onClose, onSave, isSaving, curre
             }
             fetchProductBranchSettings()
         }
-    }, [product?.id, branches]) // Solo disparar si cambia el ID o la lista de sucursales
+    }, [product?.id, product?.brand_id, product?.model_id, branches]) // Solo disparar si cambia el ID o la lista de sucursales
 
     async function fetchProductBranchSettings() {
         try {

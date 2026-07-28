@@ -26,7 +26,7 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
                         brand:brands(name),
                         model:models(name),
                         product_branch_settings(stock, branch_id)
-                    `).eq('active', true).order('name'),
+                    `).order('name'),
                     supabase.from('brands').select('*').order('name')
                 ])
 
@@ -150,10 +150,14 @@ export default function PurchaseModal({ onClose, onSave, isSaving, initialData, 
     const filteredProducts = useMemo(() => {
         if (!selectedBrand && !searchTerm) return []
         return products.filter(p => {
-            const matchesBrand = selectedBrand ? p.brand_id === selectedBrand.id : true
+            // Si hay un modelo/línea seleccionada, el filtro principal es p.model_id
             const matchesProduct = selectedProduct ? p.model_id === selectedProduct.id : true
-            const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+            // Si no hay brand_id en el producto o coincide con el de la marca/modelo, se acepta
+            const matchesBrand = selectedBrand ? (!p.brand_id || p.brand_id === selectedBrand.id || p.model_id === selectedProduct?.id) : true
+            const matchesSearch = searchTerm ? (
+                p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+            ) : true
             const isAlreadyAdded = items.some(item => item.product_id === p.id)
             return matchesBrand && matchesProduct && matchesSearch && !isAlreadyAdded
         })
