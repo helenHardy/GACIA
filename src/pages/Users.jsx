@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Search, User, Mail, Shield, MoreVertical, RefreshCw, AlertTriangle, Edit2, Trash2, X, CheckCircle, KeyRound, Lock, Copy, Check } from 'lucide-react'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import UserModal from '../components/users/UserModal'
 
@@ -157,8 +158,20 @@ export default function Users() {
                     showToast('Usuario actualizado correctamente')
                 }
             } else {
-                // Crear nuevo usuario (Auth + Perfil)
-                const { data: authData, error: authError } = await supabase.auth.signUp({
+                // Crear nuevo usuario (Auth + Perfil) sin cerrar la sesión del Administrador actual
+                const tempSupabase = createClient(
+                    import.meta.env.VITE_SUPABASE_URL,
+                    import.meta.env.VITE_SUPABASE_ANON_KEY,
+                    {
+                        auth: {
+                            persistSession: false,
+                            autoRefreshToken: false,
+                            detectSessionInUrl: false
+                        }
+                    }
+                )
+
+                const { data: authData, error: authError } = await tempSupabase.auth.signUp({
                     email: formData.email,
                     password: formData.password,
                     options: {
@@ -186,7 +199,7 @@ export default function Users() {
                     if (profileError) console.error('Error updating profile manually:', profileError)
                 }
 
-                showToast('Usuario creado correctamente. (Si se cerró tu sesión, vuelve a ingresar)')
+                showToast('Usuario creado correctamente.')
             }
 
             // --- MANAGE BRANCH ASSIGNMENTS ---
@@ -230,16 +243,26 @@ export default function Users() {
     const confirmDelete = async () => {
         if (!deleteId) return
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', deleteId)
-            if (error) throw error
+            // Intentar eliminar primero usando la función RPC administrativa (elimina de auth.users)
+            const { error: rpcError } = await supabase.rpc('admin_delete_user', {
+                target_user_id: deleteId
+            })
+
+            if (rpcError) {
+                // Si la función RPC no existe aún en la base de datos, fallback a eliminar de profiles
+                const { error: profileError } = await supabase
+                    .from('profiles')
+                    .delete()
+                    .eq('id', deleteId)
+
+                if (profileError) throw profileError
+            }
+
             showToast('Usuario eliminado correctamente')
             fetchUsers()
         } catch (err) {
             console.error('Error deleting user:', err)
-            showToast('Error al eliminar el usuario.', 'error')
+            showToast('Error al eliminar el usuario: ' + err.message, 'error')
         } finally {
             setDeleteId(null)
         }
@@ -631,24 +654,25 @@ export default function Users() {
             {/* SQL Function Setup Helper Modal */}
             {sqlModalOpen && (
                 <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '1rem' }}>
-                    <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '600px', padding: '2rem', borderRadius: '24px', backgroundColor: 'hsl(var(--background))' }}>
+                    <div className="card shadow-2xl" style={{ width: '100%', maxWidth: '650px', padding: '2rem', borderRadius: '24px', backgroundColor: 'hsl(var(--background))' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                 <div style={{ padding: '0.6rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}>
                                     <Shield size={24} />
                                 </div>
-                                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0 }}>Instalación de Función de Contraseñas</h2>
+                                <h2 style={{ fontSize: '1.25rem', fontWeight: '800', margin: 0 }}>Funciones de Administración SQL</h2>
                             </div>
                             <button onClick={() => setSqlModalOpen(false)} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}><X size={20} /></button>
                         </div>
 
                         <p style={{ fontSize: '0.9rem', color: 'hsl(var(--muted-foreground))', marginBottom: '1rem', lineHeight: '1.5' }}>
-                            Para que el panel de administración pueda cambiar la contraseña de cualquier usuario en Supabase, ejecuta esta consulta **una sola vez** en el **SQL Editor** de tu panel de Supabase:
+                            Para permitir que los administradores cambien contraseñas y eliminen usuarios por completo de Supabase Auth, ejecuta este script **una sola vez** en el **SQL Editor** de Supabase:
                         </p>
 
-                        <div style={{ position: 'relative', backgroundColor: 'hsl(222 47% 11%)', color: '#e2e8f0', padding: '1rem', borderRadius: '12px', fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto', maxHeight: '200px', marginBottom: '1.5rem' }}>
+                        <div style={{ position: 'relative', backgroundColor: 'hsl(222 47% 11%)', color: '#e2e8f0', padding: '1rem', borderRadius: '12px', fontFamily: 'monospace', fontSize: '0.8rem', overflowX: 'auto', maxHeight: '250px', marginBottom: '1.5rem' }}>
                             <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
-{`CREATE OR REPLACE FUNCTION admin_change_user_password(target_user_id uuid, new_password text)
+{`-- 1. CAMBIAR CONTRASEÑA DE USUARIO
+CREATE OR REPLACE FUNCTION admin_change_user_password(target_user_id uuid, new_password text)
 RETURNS void AS $$
 BEGIN
     IF NOT EXISTS (
@@ -665,6 +689,22 @@ BEGIN
     UPDATE auth.users
     SET encrypted_password = crypt(new_password, gen_salt('bf'))
     WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. ELIMINAR USUARIO POR COMPLETO DE AUTHENTICATION
+CREATE OR REPLACE FUNCTION admin_delete_user(target_user_id uuid)
+RETURNS void AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'Administrador'
+    ) THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden eliminar usuarios.';
+    END IF;
+
+    DELETE FROM public.profiles WHERE id = target_user_id;
+    DELETE FROM auth.users WHERE id = target_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`}
                             </pre>
@@ -690,6 +730,21 @@ BEGIN
     UPDATE auth.users
     SET encrypted_password = crypt(new_password, gen_salt('bf'))
     WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION admin_delete_user(target_user_id uuid)
+RETURNS void AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() AND role = 'Administrador'
+    ) THEN
+        RAISE EXCEPTION 'Acceso denegado. Solo administradores pueden eliminar usuarios.';
+    END IF;
+
+    DELETE FROM public.profiles WHERE id = target_user_id;
+    DELETE FROM auth.users WHERE id = target_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;`)
                                     setCopiedSql(true)
