@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle, Ship, XCircle, ChevronRight, X, Trash2, Eye, Edit2, Box, ArrowLeftRight, Truck, MapPin, Calendar, User } from 'lucide-react'
+import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle, Ship, XCircle, ChevronRight, ChevronLeft, X, Trash2, Eye, Edit2, Box, ArrowLeftRight, Truck, MapPin, Calendar, User } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import TransferModal from '../components/inventory/TransferModal'
 import TransferDetailModal from '../components/inventory/TransferDetailModal'
@@ -21,6 +21,10 @@ export default function Transfers() {
 
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [viewingTransfer, setViewingTransfer] = useState(null)
+    const [deleteTarget, setDeleteTarget] = useState(null)
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState('')
+    const [currentPage, setCurrentPage] = useState(1)
+    const pageSize = 6
 
     const [stats, setStats] = useState({
         pending: 0,
@@ -183,7 +187,7 @@ export default function Transfers() {
             } else {
                 const { data: transfer, error: tError } = await supabase
                     .from('transfers')
-                    .insert([{ ...header, sent_by: user?.id }])
+                    .insert([{ ...header, sent_by: user?.id, status: 'Pendiente' }])
                     .select()
                     .single()
                 if (tError) throw tError
@@ -286,22 +290,32 @@ export default function Transfers() {
         }
     }
 
-    const handleDelete = async (t) => {
-        if (!window.confirm(`¿Estás seguro de ELIMINAR el traspaso #${t.transfer_number}?`)) return
+    const handleDelete = (t) => {
+        if (t.status === 'Enviado') {
+            showToast('No puedes eliminar un traspaso en tránsito. Cancélalo primero.', 'error')
+            return
+        }
+        setDeleteTarget(t)
+        setDeleteConfirmInput('')
+    }
 
+    const confirmDelete = async () => {
+        if (!deleteTarget) return
         try {
             setLoading(true)
             const { error } = await supabase
                 .from('transfers')
                 .delete()
-                .eq('id', t.id)
+                .eq('id', deleteTarget.id)
 
             if (error) throw error
-            showToast('Traspaso eliminado correctamente.')
+            showToast(`Traspaso #${deleteTarget.transfer_number} eliminado correctamente.`)
+            setDeleteTarget(null)
             fetchTransfers()
         } catch (err) {
             console.error(err)
             showToast('Error al eliminar: ' + err.message, 'error')
+            setDeleteTarget(null)
         } finally {
             setLoading(false)
         }
@@ -323,6 +337,14 @@ export default function Transfers() {
         t.origin?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         t.destination?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     )
+
+    const totalPages = Math.max(1, Math.ceil(filteredTransfers.length / pageSize))
+    const safePage = Math.min(currentPage, totalPages)
+    const paginatedTransfers = filteredTransfers.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchTerm])
 
     return (
         <div style={{ padding: '0.5rem' }}>
@@ -366,6 +388,47 @@ export default function Transfers() {
                     transfer={viewingTransfer}
                     onClose={() => setViewingTransfer(null)}
                 />
+            )}
+
+            {/* Custom Delete Confirmation Modal */}
+            {deleteTarget && (
+                <div style={{
+                    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 150,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                    <div className="card" style={{ width: '400px', maxWidth: '90vw', padding: '2rem', textAlign: 'center' }}>
+                        <div style={{ width: '64px', height: '64px', backgroundColor: 'hsl(var(--destructive) / 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
+                            <Trash2 size={32} color="hsl(var(--destructive))" />
+                        </div>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '0.5rem' }}>¿Eliminar traspaso #{deleteTarget.transfer_number}?</h3>
+                        <p style={{ color: 'hsl(var(--secondary-foreground))', marginBottom: '1.5rem' }}>
+                            Esta acción no se puede deshacer. El stock del traspaso será revertido automáticamente según su estado.
+                        </p>
+                        <p style={{ fontSize: '0.875rem', fontWeight: '700', margin: '0 0 0.75rem' }}>
+                            Para confirmar, escriba <span style={{ color: 'hsl(var(--destructive))', fontWeight: '900' }}>ELIMINAR</span> a continuación:
+                        </p>
+                        <input
+                            type="text"
+                            className="btn"
+                            value={deleteConfirmInput}
+                            onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                            placeholder="Escriba ELIMINAR..."
+                            autoFocus
+                            style={{ width: '100%', justifyContent: 'flex-start', cursor: 'text', border: '1px solid hsl(var(--destructive) / 0.3)', marginBottom: '1.5rem' }}
+                        />
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button className="btn" style={{ flex: 1, backgroundColor: 'hsl(var(--secondary))' }} onClick={() => { setDeleteTarget(null); setDeleteConfirmInput('') }}>Cancelar</button>
+                            <button
+                                className="btn"
+                                style={{ flex: 1, backgroundColor: deleteConfirmInput === 'ELIMINAR' ? 'hsl(var(--destructive))' : 'hsl(var(--destructive) / 0.4)', color: 'white', fontWeight: '700' }}
+                                disabled={deleteConfirmInput !== 'ELIMINAR'}
+                                onClick={confirmDelete}
+                            >
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
@@ -463,7 +526,7 @@ export default function Transfers() {
                         <p style={{ opacity: 0.4 }}>Capture un nuevo traspaso para ver el flujo aquí.</p>
                     </div>
                 ) : (
-                    filteredTransfers.map(t => {
+                    paginatedTransfers.map(t => {
                         const config = getStatusConfig(t.status)
                         return (
                             <div key={t.id} className="card shadow-sm" style={{ padding: 0, borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.6)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -522,7 +585,7 @@ export default function Transfers() {
                                                 <button onClick={() => handleEdit(t, true)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--secondary) / 0.4)', color: 'hsl(var(--foreground) / 0.4)' }} title="Ver Lectura"><Edit2 size={14} opacity={0.5} /></button>
                                             )}
 
-                                            {(isAdmin || t.can_void) && (
+                                            {(isAdmin || t.can_void) && t.status !== 'Enviado' && (
                                                 <button onClick={() => handleDelete(t)} style={{ padding: '0.4rem', borderRadius: '8px', border: 'none', backgroundColor: 'hsl(var(--destructive) / 0.05)', color: 'hsl(var(--destructive))', cursor: 'pointer' }} title="Eliminar"><Trash2 size={14} /></button>
                                             )}
                                         </div>
@@ -652,6 +715,91 @@ export default function Transfers() {
                     })
                 )}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    padding: '1.25rem',
+                    backgroundColor: 'hsl(var(--secondary) / 0.1)',
+                    borderRadius: '24px',
+                    border: '1px solid hsl(var(--border) / 0.5)',
+                    marginTop: '1.5rem'
+                }}>
+                    <button
+                        className="btn"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={safePage === 1}
+                        style={{
+                            padding: '0.75rem 1.25rem',
+                            borderRadius: '14px',
+                            fontSize: '0.9rem',
+                            fontWeight: '800',
+                            backgroundColor: safePage === 1 ? 'hsl(var(--secondary) / 0.3)' : 'hsl(var(--secondary) / 0.6)',
+                            color: 'hsl(var(--foreground))',
+                            border: 'none',
+                            cursor: safePage === 1 ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            transition: 'all 0.2s'
+                        }}
+                    >
+                        <ChevronLeft size={16} />
+                        Anterior
+                    </button>
+
+                    <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                        {[...Array(totalPages)].map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => setCurrentPage(i + 1)}
+                                style={{
+                                    width: '38px',
+                                    height: '38px',
+                                    borderRadius: '12px',
+                                    border: 'none',
+                                    backgroundColor: safePage === i + 1 ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.3)',
+                                    color: safePage === i + 1 ? 'white' : 'hsl(var(--foreground) / 0.6)',
+                                    fontWeight: '900',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    fontSize: '0.9rem'
+                                }}
+                            >
+                                {i + 1}
+                            </button>
+                        ))}
+                    </div>
+
+                    <button
+                        className="btn"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={safePage === totalPages}
+                        style={{
+                            padding: '0.75rem 1.25rem',
+                            borderRadius: '14px',
+                            fontSize: '0.9rem',
+                            fontWeight: '800',
+                            backgroundColor: safePage === totalPages ? 'hsl(var(--secondary) / 0.3)' : 'hsl(var(--primary))',
+                            color: safePage === totalPages ? 'hsl(var(--foreground) / 0.4)' : 'white',
+                            border: 'none',
+                            cursor: safePage === totalPages ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            transition: 'all 0.2s',
+                            boxShadow: safePage === totalPages ? 'none' : '0 4px 12px rgb(var(--primary) / 0.3)'
+                        }}
+                    >
+                        Siguiente
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
+            )}
 
             <style>{`
                 @keyframes slideIn {

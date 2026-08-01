@@ -17,38 +17,56 @@ import {
     ArrowRight,
     Eye,
     X,
-    Printer
+    Printer,
+    Users,
+    DollarSign,
+    HandCoins
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { utils, writeFile } from 'xlsx'
 import { useBranch } from '../context/BranchContext'
 
+function getLocalDateString(date = new Date()) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+}
+
+function getLocalMonthString(date = new Date()) {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}`
+}
+
 export default function Reports() {
     const [activeTab, setActiveTab] = useState('products') // 'products', 'invoices'
     const [loading, setLoading] = useState(false)
-    const { branches, selectedBranchId, setSelectedBranchId } = useBranch()
+    const { branches, selectedBranchId } = useBranch()
     
     // Data states
     const [soldProducts, setSoldProducts] = useState([])
     const [invoices, setInvoices] = useState([])
+    const [debtors, setDebtors] = useState([])
     const [selectedInvoice, setSelectedInvoice] = useState(null)
     
     // Filters
     const [period, setPeriod] = useState('day') // 'day', 'month', 'year', 'range'
-    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
-    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0])
-    const [searchTerm, setSearchTerm] = useState('')
+    const [startDate, setStartDate] = useState(getLocalDateString())
+    const [endDate, setEndDate] = useState(getLocalDateString())
+    const [month, setMonth] = useState(getLocalMonthString())
+    const [year, setYear] = useState(new Date().getFullYear())
     const [filterOnlyPending, setFilterOnlyPending] = useState(false)
     const [sellers, setSellers] = useState([])
     const [selectedSellerId, setSelectedSellerId] = useState('all')
 
     useEffect(() => {
         fetchSellers()
-    }, [selectedBranchId])
+    }, [selectedBranchId]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         fetchData()
-    }, [activeTab, period, startDate, endDate, selectedBranchId, selectedSellerId])
+    }, [activeTab, period, startDate, endDate, month, year, selectedBranchId, selectedSellerId]) // eslint-disable-line react-hooks/exhaustive-deps
 
     async function fetchSellers() {
         try {
@@ -86,6 +104,8 @@ export default function Reports() {
     async function fetchData() {
         if (activeTab === 'products') {
             fetchSoldProducts()
+        } else if (activeTab === 'debtors') {
+            fetchDebtors()
         } else {
             fetchInvoices()
         }
@@ -230,7 +250,7 @@ export default function Reports() {
                     <div class="header">
                         <h1 style="margin: 0; color: #1e293b;">REPORTE DE VENTAS POR PRODUCTO</h1>
                         <p style="margin: 5px 0; color: #64748b;">Generado el: ${new Date().toLocaleString()}</p>
-                        <p style="margin: 5px 0; color: #64748b;">Periodo: ${period === 'day' ? startDate : `${startDate} al ${endDate}`}</p>
+                        <p style="margin: 5px 0; color: #64748b;">Periodo: ${period === 'day' ? startDate : period === 'month' ? month : period === 'year' ? year : `${startDate} al ${endDate}`}</p>
                     </div>
 
                     <table>
@@ -300,6 +320,16 @@ export default function Reports() {
             if (period === 'day') {
                 const start = new Date(startDate + 'T00:00:00')
                 const end = new Date(startDate + 'T23:59:59')
+                query = query.gte('sale.created_at', start.toISOString()).lte('sale.created_at', end.toISOString())
+            } else if (period === 'month') {
+                const start = new Date(month + '-01T00:00:00')
+                const end = new Date(month + '-01T23:59:59')
+                end.setMonth(end.getMonth() + 1)
+                end.setDate(0)
+                query = query.gte('sale.created_at', start.toISOString()).lte('sale.created_at', end.toISOString())
+            } else if (period === 'year') {
+                const start = new Date(year + '-01-01T00:00:00')
+                const end = new Date(year + '-12-31T23:59:59')
                 query = query.gte('sale.created_at', start.toISOString()).lte('sale.created_at', end.toISOString())
             } else if (period === 'range') {
                 const start = new Date(startDate + 'T00:00:00')
@@ -376,6 +406,16 @@ export default function Reports() {
                 const start = new Date(startDate + 'T00:00:00')
                 const end = new Date(startDate + 'T23:59:59')
                 query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+            } else if (period === 'month') {
+                const start = new Date(month + '-01T00:00:00')
+                const end = new Date(month + '-01T23:59:59')
+                end.setMonth(end.getMonth() + 1)
+                end.setDate(0)
+                query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+            } else if (period === 'year') {
+                const start = new Date(year + '-01-01T00:00:00')
+                const end = new Date(year + '-12-31T23:59:59')
+                query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
             } else if (period === 'range') {
                 const start = new Date(startDate + 'T00:00:00')
                 const end = new Date(endDate + 'T23:59:59')
@@ -413,6 +453,79 @@ export default function Reports() {
         }
     }
 
+    async function fetchDebtors() {
+        try {
+            setLoading(true)
+            let query = supabase
+                .from('sales')
+                .select(`
+                    *,
+                    customers(id, name, phone, tax_id),
+                    seller:profiles!fk_sales_user(full_name),
+                    customer_payments (*)
+                `)
+                .eq('is_credit', true)
+                .order('created_at', { ascending: false })
+
+            // Date filtering
+            if (period === 'day') {
+                const start = new Date(startDate + 'T00:00:00')
+                const end = new Date(startDate + 'T23:59:59')
+                query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+            } else if (period === 'month') {
+                const start = new Date(month + '-01T00:00:00')
+                const end = new Date(month + '-01T23:59:59')
+                end.setMonth(end.getMonth() + 1)
+                end.setDate(0)
+                query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+            } else if (period === 'year') {
+                const start = new Date(year + '-01-01T00:00:00')
+                const end = new Date(year + '-12-31T23:59:59')
+                query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+            } else if (period === 'range') {
+                const start = new Date(startDate + 'T00:00:00')
+                const end = new Date(endDate + 'T23:59:59')
+                query = query.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+            }
+
+            if (selectedBranchId === 'all') {
+                const branchIds = branches.map(b => b.id)
+                if (branchIds.length > 0) {
+                    query = query.in('branch_id', branchIds)
+                }
+            } else if (selectedBranchId) {
+                query = query.eq('branch_id', selectedBranchId)
+            }
+
+            if (selectedSellerId && selectedSellerId !== 'all') {
+                query = query.eq('user_id', selectedSellerId)
+            }
+
+            const { data, error } = await query
+            if (error) throw error
+
+            // Keep only credit invoices with a pending balance > 0
+            const debtorsList = (data || [])
+                .map(inv => {
+                    const totalPaid = inv.customer_payments?.reduce((acc, p) => acc + Number(p.amount), 0) || 0
+                    const daysOverdue = Math.max(0, Math.floor((Date.now() - new Date(inv.created_at).getTime()) / 86400000))
+                    return {
+                        ...inv,
+                        totalPaid,
+                        balance: Number(inv.total) - totalPaid,
+                        daysOverdue
+                    }
+                })
+                .filter(inv => inv.balance > 0.01)
+
+            setDebtors(debtorsList)
+        } catch (err) {
+            console.error('Error fetching debtors:', err)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     const exportToExcel = () => {
         let reportData = []
         let filename = ''
@@ -429,6 +542,21 @@ export default function Reports() {
                 'Fecha': new Date(item.sale?.created_at).toLocaleString()
             }))
             filename = 'Reporte_Productos_Vendidos'
+        } else if (activeTab === 'debtors') {
+            reportData = debtors.map((item, index) => ({
+                'Nro': index + 1,
+                'Cliente': item.customers?.name || 'Venta General',
+                'NIT': item.customers?.tax_id || '',
+                'Teléfono': item.customers?.phone || '',
+                'Nro Factura': item.sale_number,
+                'Fecha': new Date(item.created_at).toLocaleString(),
+                'Vendedor': item.seller?.full_name || 'Sistema',
+                'Total': Number(item.total).toFixed(2),
+                'Pagado': Number(item.totalPaid).toFixed(2),
+                'Saldo Pendiente': Number(item.balance).toFixed(2),
+                'Días de Atraso': item.daysOverdue
+            }))
+            filename = 'Reporte_Deudores'
         } else {
             reportData = invoices.map(inv => ({
                 'Fecha': new Date(inv.created_at).toLocaleString(),
@@ -470,7 +598,7 @@ export default function Reports() {
 
             setPaymentModalOpen(false)
             setPaymentAmount('')
-            fetchInvoices() // Refresh to see updated payments
+            fetchData() // Refresh to see updated payments
         } catch (err) {
             console.error('Error registering payment:', err)
             alert('Error al registrar pago')
@@ -481,6 +609,83 @@ export default function Reports() {
 
     const totalInvoicesSum = invoices.reduce((acc, inv) => acc + Number(inv.total), 0)
     const totalSold = soldProducts.reduce((acc, item) => acc + Number(item.total), 0)
+    const totalDebt = debtors.reduce((acc, inv) => acc + Number(inv.balance), 0)
+    const uniqueDebtorCount = new Set(debtors.map(inv => inv.customer_id)).size
+
+    function handlePrintDebtorsReport() {
+        if (debtors.length === 0) return
+
+        const printWindow = window.open('', '_blank', 'width=1000,height=900')
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Reporte de Deudores - ${new Date().toLocaleDateString()}</title>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                        td { border: 1px solid #e2e8f0; padding: 10px; font-size: 12px; }
+                        .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+                        .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; }
+                        .total-row { background-color: #f1f5f9; font-weight: bold; font-size: 14px; }
+                        .debt { color: #e11d48; font-weight: 700; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1 style="margin: 0; color: #1e293b;">REPORTE DE DEUDORES (FACTURAS A CRÉDITO)</h1>
+                        <p style="margin: 5px 0; color: #64748b;">Generado el: ${new Date().toLocaleString()}</p>
+                        <p style="margin: 5px 0; color: #64748b;">Periodo: ${period === 'day' ? startDate : period === 'month' ? month : period === 'year' ? year : `${startDate} al ${endDate}`}</p>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Cliente</th>
+                                <th>Nro Factura</th>
+                                <th>Fecha</th>
+                                <th>Vendedor</th>
+                                <th style="text-align: right;">Total</th>
+                                <th style="text-align: right;">Pagado</th>
+                                <th style="text-align: right;">Saldo</th>
+                                <th style="text-align: center;">Días</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${debtors.map((item, index) => `
+                                <tr>
+                                    <td>${index + 1}</td>
+                                    <td>${item.customers?.name || 'Venta General'}</td>
+                                    <td>#${item.sale_number}</td>
+                                    <td>${new Date(item.created_at).toLocaleDateString()}</td>
+                                    <td>${item.seller?.full_name || 'Admin'}</td>
+                                    <td style="text-align: right;">Bs. ${Number(item.total).toFixed(2)}</td>
+                                    <td style="text-align: right;">Bs. ${Number(item.totalPaid).toFixed(2)}</td>
+                                    <td style="text-align: right;" class="debt">Bs. ${Number(item.balance).toFixed(2)}</td>
+                                    <td style="text-align: center;">${item.daysOverdue || 0}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td colspan="7" style="text-align: right; padding: 15px;">TOTAL DEUDA PENDIENTE</td>
+                                <td style="text-align: right; padding: 15px; color: #e11d48;">Bs. ${totalDebt.toFixed(2)}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="footer">
+                        Documento generado automáticamente por el Sistema de Ventas
+                    </div>
+                </body>
+            </html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+    }
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingBottom: '3rem' }}>
@@ -527,6 +732,23 @@ export default function Reports() {
                         >
                             Reporte de Factura
                         </button>
+                        <button
+                            onClick={() => setActiveTab('debtors')}
+                            style={{
+                                padding: '0.6rem 1.5rem',
+                                borderRadius: '12px',
+                                border: 'none',
+                                fontSize: '0.9rem',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                backgroundColor: activeTab === 'debtors' ? 'white' : 'transparent',
+                                color: activeTab === 'debtors' ? 'hsl(var(--destructive))' : 'hsl(var(--foreground) / 0.5)',
+                                boxShadow: activeTab === 'debtors' ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+                                transition: 'all 0.2s ease'
+                            }}
+                        >
+                            Deudores
+                        </button>
                     </div>
                 </div>
 
@@ -542,7 +764,7 @@ export default function Reports() {
 
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '0.4rem', borderRadius: '16px', gap: '0.4rem' }}>
-                    {['day', 'range'].map(p => (
+                    {['day', 'month', 'year', 'range'].map(p => (
                         <button
                             key={p}
                             onClick={() => setPeriod(p)}
@@ -559,20 +781,48 @@ export default function Reports() {
                                 textTransform: 'uppercase'
                             }}
                         >
-                            {p === 'day' ? 'Diario' : 'Rango'}
+                            {p === 'day' ? 'Diario' : p === 'month' ? 'Mes' : p === 'year' ? 'Año' : 'Rango'}
                         </button>
                     ))}
                 </div>
 
-                <div style={{ position: 'relative', minWidth: '220px' }}>
-                    <Calendar size={16} style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, color: 'hsl(var(--primary))' }} />
-                    <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 3.2rem', borderRadius: '16px', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700', outline: 'none', backgroundColor: 'white', color: '#1e293b' }}
-                    />
-                </div>
+                {(period === 'day' || period === 'range') && (
+                    <div style={{ position: 'relative', minWidth: '220px' }}>
+                        <Calendar size={16} style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, color: 'hsl(var(--primary))' }} />
+                        <input
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 3.2rem', borderRadius: '16px', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700', outline: 'none', backgroundColor: 'white', color: '#1e293b' }}
+                        />
+                    </div>
+                )}
+
+                {period === 'month' && (
+                    <div style={{ position: 'relative', minWidth: '220px' }}>
+                        <Calendar size={16} style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, color: 'hsl(var(--primary))' }} />
+                        <input
+                            type="month"
+                            value={month}
+                            onChange={(e) => setMonth(e.target.value)}
+                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 3.2rem', borderRadius: '16px', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700', outline: 'none', backgroundColor: 'white', color: '#1e293b' }}
+                        />
+                    </div>
+                )}
+
+                {period === 'year' && (
+                    <div style={{ position: 'relative', minWidth: '220px' }}>
+                        <Calendar size={16} style={{ position: 'absolute', left: '1.25rem', top: '50%', transform: 'translateY(-50%)', opacity: 0.4, color: 'hsl(var(--primary))' }} />
+                        <input
+                            type="number"
+                            value={year}
+                            min="2000"
+                            max="2100"
+                            onChange={(e) => setYear(parseInt(e.target.value) || new Date().getFullYear())}
+                            style={{ width: '100%', padding: '0.8rem 1rem 0.8rem 3.2rem', borderRadius: '16px', border: '1.5px solid #e2e8f0', fontSize: '0.9rem', fontWeight: '700', outline: 'none', backgroundColor: 'white', color: '#1e293b' }}
+                        />
+                    </div>
+                )}
 
                 {period === 'range' && (
                     <div style={{ position: 'relative', minWidth: '220px' }}>
@@ -702,6 +952,135 @@ export default function Reports() {
                         </table>
                     </div>
                 </div>
+            ) : activeTab === 'debtors' ? (
+                /* TAB 3: DEUDORES */
+                <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+                        <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.6)', backgroundColor: 'white', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ padding: '1rem', borderRadius: '16px', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))' }}>
+                                <FileText size={28} />
+                            </div>
+                            <div>
+                                <p style={{ fontSize: '0.85rem', fontWeight: '600', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Facturas a Crédito</p>
+                                <p style={{ fontSize: '2rem', fontWeight: '900', color: 'hsl(var(--foreground))', lineHeight: 1 }}>{debtors.length}</p>
+                            </div>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.6)', backgroundColor: 'white', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ padding: '1rem', borderRadius: '16px', backgroundColor: 'hsl(var(--destructive) / 0.1)', color: 'hsl(var(--destructive))' }}>
+                                <DollarSign size={28} />
+                            </div>
+                            <div>
+                                <p style={{ fontSize: '0.85rem', fontWeight: '600', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Deuda Total</p>
+                                <p style={{ fontSize: '2rem', fontWeight: '900', color: 'hsl(var(--destructive))', lineHeight: 1 }}>Bs. {totalDebt.toFixed(2)}</p>
+                            </div>
+                        </div>
+                        <div className="card shadow-sm" style={{ padding: '1.5rem', borderRadius: '20px', border: '1px solid hsl(var(--border) / 0.6)', backgroundColor: 'white', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <div style={{ padding: '1rem', borderRadius: '16px', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))' }}>
+                                <Users size={28} />
+                            </div>
+                            <div>
+                                <p style={{ fontSize: '0.85rem', fontWeight: '600', color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Clientes Deudores</p>
+                                <p style={{ fontSize: '2rem', fontWeight: '900', color: 'hsl(var(--foreground))', lineHeight: 1 }}>{uniqueDebtorCount}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="card shadow-sm" style={{ padding: 0, borderRadius: '24px', overflow: 'hidden', border: '1px solid hsl(var(--border) / 0.5)', backgroundColor: 'white' }}>
+                        <div style={{ padding: '1.25rem 2rem', borderBottom: '1px solid #eee', backgroundColor: '#f8f9fa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '800', color: 'hsl(var(--destructive))' }}>Facturas a Crédito Pendientes</h3>
+                                <p style={{ margin: 0, fontSize: '0.8rem', opacity: 0.5 }}>Solo facturas con saldo pendiente mayor a 0</p>
+                            </div>
+                            <button 
+                                onClick={handlePrintDebtorsReport}
+                                style={{ 
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: '12px',
+                                    border: '1.5px solid hsl(var(--destructive))',
+                                    backgroundColor: 'hsl(var(--destructive) / 0.05)',
+                                    color: 'hsl(var(--destructive))',
+                                    fontSize: '0.8rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    transition: '0.2s'
+                                }}
+                                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--destructive))'; e.currentTarget.style.color = 'white' }}
+                                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--destructive) / 0.05)'; e.currentTarget.style.color = 'hsl(var(--destructive))' }}
+                            >
+                                <Printer size={18} /> IMPRIMIR REPORTE
+                            </button>
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                <thead style={{ backgroundColor: 'hsl(var(--secondary) / 0.3)' }}>
+                                    <tr>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Cliente</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Nro Factura</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Fecha</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5 }}>Vendedor</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, textAlign: 'right' }}>Total</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, textAlign: 'right' }}>Pagado</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, textAlign: 'right' }}>Saldo</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, textAlign: 'center' }}>Días</th>
+                                        <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase', opacity: 0.5, textAlign: 'right' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {loading ? (
+                                        <tr><td colSpan="9" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>Cargando datos...</td></tr>
+                                    ) : debtors.length === 0 ? (
+                                        <tr><td colSpan="9" style={{ padding: '4rem', textAlign: 'center', opacity: 0.5 }}>No hay deudas pendientes en este periodo</td></tr>
+                                    ) : (
+                                        debtors.map((item, index) => (
+                                            <tr key={item.id || index} style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)' }}>
+                                                <td style={{ padding: '1rem' }}>
+                                                    <div style={{ fontWeight: '800', fontSize: '0.9rem' }}>{item.customers?.name || 'Venta General'}</div>
+                                                    <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>{item.customers?.phone || 'Sin teléfono'}</div>
+                                                </td>
+                                                <td style={{ padding: '1rem' }}>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: '700', backgroundColor: 'hsl(var(--secondary) / 0.5)', padding: '2px 8px', borderRadius: '6px' }}>#{item.sale_number}</span>
+                                                </td>
+                                                <td style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600' }}>{new Date(item.created_at).toLocaleDateString()}</td>
+                                                <td style={{ padding: '1rem', fontSize: '0.85rem', fontWeight: '600' }}>{item.seller?.full_name || 'Admin'}</td>
+                                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700' }}>Bs. {Number(item.total).toFixed(2)}</td>
+                                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: '#10b981' }}>Bs. {Number(item.totalPaid).toFixed(2)}</td>
+                                                <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', color: 'hsl(var(--destructive))' }}>Bs. {Number(item.balance).toFixed(2)}</td>
+                                                <td style={{ padding: '1rem', textAlign: 'center' }}>
+                                                    <span style={{
+                                                        fontSize: '0.7rem', fontWeight: '900', padding: '2px 8px', borderRadius: '6px',
+                                                        backgroundColor: item.daysOverdue > 30 ? '#fff1f2' : 'hsl(var(--secondary) / 0.5)',
+                                                        color: item.daysOverdue > 30 ? '#e11d48' : '#64748b'
+                                                    }}>
+                                                        {item.daysOverdue}d
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '1rem', textAlign: 'right' }}>
+                                                    <button
+                                                        onClick={() => { setSelectedInvoice(item); setPaymentModalOpen(true) }}
+                                                        className="btn btn-primary"
+                                                        style={{ padding: '0.5rem 1rem', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '800', gap: '0.4rem' }}
+                                                    >
+                                                        <HandCoins size={16} /> ABONAR
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                                <tfoot style={{ backgroundColor: 'hsl(var(--destructive))', color: 'white' }}>
+                                    <tr>
+                                        <td colSpan="6" style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '800', fontSize: '1.1rem' }}>TOTAL DEUDA PENDIENTE</td>
+                                        <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem' }}>Bs. {totalDebt.toFixed(2)}</td>
+                                        <td colSpan="2"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </>
             ) : (
                 /* TAB 2: REPORTE DE FACTURA (Dual View) */
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1.5rem', alignItems: 'start' }}>

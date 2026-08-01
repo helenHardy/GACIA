@@ -21,7 +21,8 @@ import {
     ChevronLeft,
     ChevronDown,
     MapPin,
-    Bell
+    Bell,
+    HandCoins
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 import { useBranch } from '../context/BranchContext'
@@ -33,7 +34,6 @@ export default function Layout() {
     const [userRole, setUserRole] = useState(null)
     const [branding, setBranding] = useState(null)
     const [allowedMenuKeys, setAllowedMenuKeys] = useState([])
-    const [loadingPermissions, setLoadingPermissions] = useState(true)
 
     const [collapsed, setCollapsed] = useState(false)
     const { branches, selectedBranchId, setSelectedBranchId, loading: loadingBranches } = useBranch()
@@ -51,8 +51,6 @@ export default function Layout() {
                 }
             } catch (err) {
                 console.error('Error fetching permissions:', err)
-            } finally {
-                setLoadingPermissions(false)
             }
         }
 
@@ -66,8 +64,6 @@ export default function Layout() {
             if (data) {
                 setUserRole(data.role)
                 fetchPermissions(data.role)
-            } else {
-                setLoadingPermissions(false)
             }
         }
 
@@ -101,8 +97,6 @@ export default function Layout() {
             if (user) {
                 fetchUserRole(user.id)
                 fetchUserBranding(user.id)
-            } else {
-                setLoadingPermissions(false)
             }
         })
     }, [])
@@ -123,6 +117,7 @@ export default function Layout() {
         { to: '/purchases', icon: <ClipboardList size={18} />, label: 'Cargar Inventario', key: 'purchases' },
         { to: '/transfers', icon: <ArrowLeftRight size={18} />, label: 'Traspasos', key: 'transfers' },
         { to: '/reports', icon: <FileText size={18} />, label: 'Reportes', key: 'reports' },
+        { to: '/debtors', icon: <HandCoins size={18} />, label: 'Deudores', key: 'customers' },
         { to: '/customers', icon: <Contact size={18} />, label: 'Clientes', key: 'customers' },
         { to: '/users', icon: <UserRoundCog size={18} />, label: 'Usuarios', key: 'users' },
         { to: '/classifications', icon: <Layers size={18} />, label: 'Clasificaciones', key: 'classifications' },

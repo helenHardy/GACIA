@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Search, ShoppingCart, Trash2, Wallet, Banknote, QrCode, Building2, Printer, CheckCircle, X, Tag, ChevronRight, Layers, LayoutGrid, RefreshCw, ClipboardList } from 'lucide-react'
+import { Search, ShoppingCart, Trash2, Wallet, Banknote, QrCode, Building2, Printer, FileText, CheckCircle, X, Tag, ChevronRight, Layers, LayoutGrid, RefreshCw, ClipboardList } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import ProductGrid from '../components/pos/ProductGrid'
 import Cart from '../components/pos/Cart'
@@ -14,6 +14,7 @@ export default function POS() {
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
     const [isProcessing, setIsProcessing] = useState(false)
     const [paymentMethod, setPaymentMethod] = useState('Efectivo')
+    const [outputMode, setOutputMode] = useState('print') // 'print' or 'pdf'
     const [lastSale, setLastSale] = useState(null)
     const [showTicket, setShowTicket] = useState(false)
     const [brands, setBrands] = useState([])
@@ -77,7 +78,6 @@ export default function POS() {
         }
 
         try {
-            // Obtener todas las marcas que tienen productos con stock en esta sucursal
             const { data, error } = await supabase
                 .from('brands')
                 .select(`
@@ -145,7 +145,6 @@ export default function POS() {
         setCart(prev => prev.map(item => {
             if (item.id === productId) {
                 const availableStock = item.stock || 0
-                // Permitimos 0 temporalmente para que el usuario pueda borrar y escribir
                 const qty = Math.max(0, newQuantity)
 
                 if (qty > availableStock) {
@@ -197,15 +196,10 @@ export default function POS() {
                 p_notes: checkoutData?.notes || ''
             }
 
-            console.log('Registrando venta con parámetros:', rpcArgs)
-
             const { data: sale, error: saleError } = await supabase.rpc('register_sale_v3', rpcArgs)
             if (saleError) throw saleError
 
-            // ELIMINADO: La actualización manual del saldo del cliente.
-            // Ahora se encarga el trigger trg_sales_credit en la base de datos de forma automática y segura.
-
-            setLastSale({ 
+            const newSaleObj = { 
                 sale, 
                 items: [...cart], 
                 branch: branches.find(b => Number(b.id) === branchIdNum), 
@@ -213,17 +207,48 @@ export default function POS() {
                 seller: checkoutData?.seller || null,
                 paymentMethod: checkoutData?.paymentMethod, 
                 currencySymbol 
-            })
-            setShowTicket(true)
+            }
+            
+            setLastSale(newSaleObj)
             setCart([])
             setIsCheckoutOpen(false)
             setGridRefreshKey(prev => prev + 1)
+
+            setTimeout(() => {
+                if (outputMode === 'print') {
+                    triggerPrintDirect(newSaleObj)
+                } else if (outputMode === 'pdf') {
+                    triggerPdfDirect(newSaleObj)
+                } else {
+                    setShowTicket(true)
+                }
+            }, 100)
         } catch (err) {
             console.error(err)
             alert('Error al registrar venta: ' + err.message)
         } finally {
             setIsProcessing(false)
         }
+    }
+
+    const triggerPrintDirect = (saleData) => {
+        if (!ticketRef.current) return;
+        const printArea = ticketRef.current.innerHTML
+        const printWindow = window.open('', '_blank', 'width=800,height=600')
+        printWindow.document.write(`<html><head><title>Ticket</title><style>body{margin:0;padding:0;}</style></head><body>${printArea}<script>window.onload=()=>{window.print();window.onafterprint=()=>window.close();}</script></body></html>`)
+        printWindow.document.close()
+    }
+
+    const triggerPdfDirect = (saleData) => {
+        if (!ticketRef.current) return;
+        const opt = {
+            margin:       [5, 5, 5, 5],
+            filename:     `Comprobante_${saleData?.sale?.sale_number || 'venta'}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(ticketRef.current).save();
     }
 
     const handlePrint = () => {
@@ -505,7 +530,57 @@ export default function POS() {
                         <div style={{ padding: '0.5rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}><ShoppingCart size={20} /></div>
                         <h2 style={{ fontSize: '1.15rem', fontWeight: '800' }}>Orden Actual</h2>
                     </div>
-                    <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: 'hsl(var(--primary))', color: 'white', padding: '4px 12px', borderRadius: '99px' }}>{cart.length} PRODUCTOS</span>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                        {/* Selector Imprimir / PDF / Mostrar Modal */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'hsl(var(--secondary) / 0.3)', padding: '4px', borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.5)' }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: '900', textTransform: 'uppercase', opacity: 0.5, paddingLeft: '0.5rem' }}>Al confirmar:</span>
+                            <button
+                                type="button"
+                                onClick={() => setOutputMode('print')}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    padding: '0.4rem 0.85rem',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    backgroundColor: outputMode === 'print' ? 'hsl(var(--primary))' : 'transparent',
+                                    color: outputMode === 'print' ? 'white' : 'hsl(var(--foreground) / 0.6)',
+                                    boxShadow: outputMode === 'print' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <Printer size={14} /> Imprimir
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setOutputMode('pdf')}
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    padding: '0.4rem 0.85rem',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    fontSize: '0.75rem',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    backgroundColor: outputMode === 'pdf' ? 'hsl(var(--primary))' : 'transparent',
+                                    color: outputMode === 'pdf' ? 'white' : 'hsl(var(--foreground) / 0.6)',
+                                    boxShadow: outputMode === 'pdf' ? '0 2px 6px rgba(0,0,0,0.15)' : 'none',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <FileText size={14} /> Descargar PDF
+                            </button>
+                        </div>
+
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', backgroundColor: 'hsl(var(--primary))', color: 'white', padding: '4px 12px', borderRadius: '99px' }}>{cart.length} PRODUCTOS</span>
+                    </div>
                 </div>
 
                 <div className="no-scrollbar" style={{ overflowY: 'visible' }}>
@@ -551,6 +626,23 @@ export default function POS() {
                     onClose={() => setCart([])}
                     onConfirm={handleCheckout}
                 />
+            )}
+
+            {/* Hidden Ticket Container for direct print / PDF export */}
+            {lastSale && (
+                <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+                    <div ref={ticketRef}>
+                        <Ticket 
+                            sale={lastSale.sale}
+                            items={lastSale.items}
+                            branch={lastSale.branch}
+                            customer={lastSale.customer}
+                            seller={lastSale.seller}
+                            paymentMethod={lastSale.paymentMethod}
+                            currencySymbol={lastSale.currencySymbol}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     )

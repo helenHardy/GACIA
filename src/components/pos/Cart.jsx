@@ -1,7 +1,7 @@
 import React from 'react'
-import { Plus, Minus, Trash2, Package, ShoppingCart, Box } from 'lucide-react'
+import { Plus, Minus, Trash2, Package, ShoppingCart, Box, Printer, FileText } from 'lucide-react'
 
-export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity, onSetPrice, currencySymbol = 'Bs.' }) {
+export default function Cart({ items, onRemove, onUpdateQuantity, onSetQuantity, onSetPrice, currencySymbol = 'Bs.', outputMode = 'print', onOutputModeChange }) {
     if (items.length === 0) {
         return (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--secondary-foreground))', padding: '2rem', opacity: 0.3 }}>

@@ -298,13 +298,21 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
                                     style={{
                                         width: '100%',
                                         padding: '0.75rem 1rem',
-                                        backgroundColor: 'hsl(var(--secondary) / 0.3)',
-                                        border: '1px solid hsl(var(--border) / 0.5)',
+                                        backgroundColor: !selectedSellerId 
+                                            ? 'hsl(0 84.2% 60.2% / 0.15)' 
+                                            : 'hsl(var(--secondary) / 0.3)',
+                                        border: !selectedSellerId 
+                                            ? '2px solid hsl(0 84.2% 60.2%)' 
+                                            : '1px solid hsl(var(--border) / 0.5)',
+                                        color: !selectedSellerId 
+                                            ? 'hsl(0 84.2% 60.2%)' 
+                                            : 'inherit',
                                         borderRadius: '14px',
                                         fontSize: '0.85rem',
                                         fontWeight: '700',
                                         outline: 'none',
-                                        cursor: 'pointer'
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease-in-out'
                                     }}
                                 >
                                     <option value="">Seleccionar Vendedor</option>

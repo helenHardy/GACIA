@@ -416,10 +416,30 @@ export default function ProductGrid({ searchTerm, branchId, brandId, modelId, on
                                                     e.stopPropagation();
                                                     const qty = rowQuantities[product.id] || 1;
                                                     onAddToCart(product, qty);
-                                                    // Reiniciar cantidad local después de agregar
                                                     setRowQuantities(prev => ({ ...prev, [product.id]: 1 }));
+
+                                                    // Enfocar el input de cantidad del siguiente producto disponible
+                                                    setTimeout(() => {
+                                                        const currentIdx = paginatedProducts.findIndex(p => p.id === product.id);
+                                                        if (currentIdx !== -1) {
+                                                            // Buscar el siguiente producto con stock disponible
+                                                            let nextIdx = currentIdx + 1;
+                                                            while (nextIdx < paginatedProducts.length && paginatedProducts[nextIdx].stock <= 0) {
+                                                                nextIdx++;
+                                                            }
+                                                            if (nextIdx < paginatedProducts.length) {
+                                                                const nextProduct = paginatedProducts[nextIdx];
+                                                                const nextInput = document.querySelector(`input[data-prod-id="${nextProduct.id}"]`);
+                                                                if (nextInput) {
+                                                                    nextInput.focus();
+                                                                    nextInput.select();
+                                                                }
+                                                            }
+                                                        }
+                                                    }, 50);
                                                 }
                                             }}
+                                            data-prod-id={product.id}
                                             style={{ width: '110px', textAlign: 'center', border: 'none', background: 'transparent', fontWeight: '900', fontSize: '1rem', outline: 'none' }}
                                         />
                                         <button

@@ -13,6 +13,7 @@ import Suppliers from './pages/Suppliers'
 import Purchases from './pages/Purchases'
 import Transfers from './pages/Transfers'
 import Reports from './pages/Reports'
+import Debtors from './pages/Debtors'
 import Customers from './pages/Customers'
 import Sales from './pages/Sales'
 import QuotationPOS from './pages/QuotationPOS'
@@ -75,6 +76,7 @@ function App() {
           <Route path="purchases" element={<Purchases />} />
           <Route path="transfers" element={<Transfers />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="debtors" element={<Debtors />} />
           <Route path="customers" element={<Customers />} />
           <Route path="sales" element={<Sales />} />
           <Route path="quotations" element={<QuotationPOS />} />

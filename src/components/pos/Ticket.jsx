@@ -189,17 +189,25 @@ const Ticket = forwardRef(({ sale, items, branch, customer, seller, paymentMetho
 
             {/* Header section with Centered Branch Info */}
             <div style={{ display: 'flex', position: 'relative', width: '100%', marginBottom: '25px', alignItems: 'center', minHeight: '40px' }}>
-                <div style={{ position: 'absolute', left: 0, display: 'flex', alignItems: 'center' }}>
-                    <span style={{ fontSize: '32px', fontWeight: 'bold', color: 'black', fontFamily: "'Arial', sans-serif", lineHeight: 1 }}>
-                        {branch?.name || 'GACIA'}
-                    </span>
-                    <svg width="10" height="15" viewBox="0 0 10 15" style={{ marginLeft: '3px', marginTop: '-8px' }}>
-                        <polygon points="0,15 10,0 5,0 0,10" fill="#d91c1c" />
-                    </svg>
+                <div style={{ position: 'absolute', left: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <span style={{ fontSize: '32px', fontWeight: 'bold', color: 'black', fontFamily: "'Arial', sans-serif", lineHeight: 1 }}>
+                            {branch?.name || 'GACIA'}
+                        </span>
+                        <svg width="10" height="15" viewBox="0 0 10 15" style={{ marginLeft: '3px', marginTop: '-8px' }}>
+                            <polygon points="0,15 10,0 5,0 0,10" fill="#d91c1c" />
+                        </svg>
+                    </div>
+                    {branch?.address && (
+                        <p style={{ margin: '4px 0 0 0', fontSize: '11px', fontWeight: '500', color: '#333' }}>
+                            {branch.address}
+                        </p>
+                    )}
                 </div>
                 
                 <div style={{ margin: '0 auto', textAlign: 'center' }}>
                     <p style={{ margin: '0 0 2px 0', fontSize: '13px', fontWeight: 'bold' }}>{branch?.name || 'Casa Matriz'}</p>
+                    {branch?.address && <p style={{ margin: '0 0 2px 0', fontSize: '11px' }}>{branch.address}</p>}
                     <p style={{ margin: '0', fontSize: '13px' }}>Tel: {branch?.phone || '71522611 —71522611'}</p>
                 </div>
             </div>
