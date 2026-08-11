@@ -152,7 +152,7 @@ const Ticket = forwardRef(({ sale, items, branch, customer, seller, paymentMetho
                 @media print {
                     @page { 
                         size: A4; 
-                        margin: 0; 
+                        margin: 8mm; 
                     }
                     body { 
                         margin: 0; 
@@ -161,12 +161,16 @@ const Ticket = forwardRef(({ sale, items, branch, customer, seller, paymentMetho
                     }
                     .no-print { display: none !important; }
                     .ticket-container { 
-                        width: 190mm !important; 
+                        width: 100% !important; 
                         height: auto;
-                        padding: 10mm 12mm !important;
+                        padding: 0 !important;
                         box-shadow: none !important;
-                        margin: 0 auto !important;
+                        margin: 0 !important;
                     }
+                    thead { display: table-header-group; }
+                    tbody { display: table-row-group; }
+                    tr { break-inside: avoid; page-break-inside: avoid; }
+                    .avoid-break { break-inside: avoid; page-break-inside: avoid; }
                 }
                 .bw-table {
                     width: 100%;

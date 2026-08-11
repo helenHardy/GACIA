@@ -1,3 +1,5 @@
+-- OBSOLETO: Este script fue reemplazado por fix_transfers_stock_consistency.sql.
+-- NO volver a ejecutar por separado (duplica/contradice la lógica consolidada).
 -- SOLUCIÓN LOGÍSTICA DE DOS PASOS (ENVÍO Y RECEPCIÓN)
 -- 1. Al enviar: Se descuenta de Origen.
 -- 2. Al recibir: Se suma a Destino.

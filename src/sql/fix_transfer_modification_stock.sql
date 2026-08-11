@@ -1,3 +1,5 @@
+-- OBSOLETO: Este script fue reemplazado por fix_transfers_stock_consistency.sql.
+-- NO volver a ejecutar por separado (duplica/contradice la lógica consolidada).
 -- SOLUCIÓN PARA LA EDICIÓN DE TRASPASOS RECIBIDOS
 -- Esta función asegura que si se modifican los productos de un traspaso que ya fue recibido,
 -- el stock se ajuste correctamente (revierta lo viejo y aplique lo nuevo).

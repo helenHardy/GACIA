@@ -1,3 +1,5 @@
+-- OBSOLETO: Este script fue reemplazado por fix_transfers_stock_consistency.sql.
+-- NO volver a ejecutar por separado (duplica/contradice la lógica consolidada).
 -- SOLUCIÓN DEFINITIVA PARA DUPLICIDAD DE STOCK EN TRASPASOS
 -- Este script elimina disparadores redundantes y asegura que el stock solo se mueva una vez.
 

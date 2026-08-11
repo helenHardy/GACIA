@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
-import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle, Ship, XCircle, ChevronRight, ChevronLeft, X, Trash2, Eye, Edit2, Box, ArrowLeftRight, Truck, MapPin, Calendar, User } from 'lucide-react'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Plus, Search, ArrowRight, RefreshCw, AlertTriangle, Clock, CheckCircle, Ship, XCircle, ChevronRight, ChevronLeft, X, Trash2, Eye, Edit2, Box, ArrowLeftRight, Truck, MapPin, Calendar, User, Printer, FileSpreadsheet, FileText } from 'lucide-react'
+import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import TransferModal from '../components/inventory/TransferModal'
 import TransferDetailModal from '../components/inventory/TransferDetailModal'
@@ -9,7 +10,6 @@ export default function Transfers() {
     const [transfers, setTransfers] = useState([])
     const [loading, setLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
-    const [error, setError] = useState(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [isAdmin, setIsAdmin] = useState(false)
     const [isReadOnly, setIsReadOnly] = useState(false)
@@ -25,6 +25,11 @@ export default function Transfers() {
     const [deleteConfirmInput, setDeleteConfirmInput] = useState('')
     const [currentPage, setCurrentPage] = useState(1)
     const pageSize = 6
+
+    // Reporte de traspasos
+    const [isReportOpen, setIsReportOpen] = useState(false)
+    const [reportLoading, setReportLoading] = useState(false)
+    const [reportTransfers, setReportTransfers] = useState([])
 
     const [stats, setStats] = useState({
         pending: 0,
@@ -47,57 +52,27 @@ export default function Transfers() {
         checkUserRole()
     }, [])
 
-    useEffect(() => {
-        fetchTransfers()
-
-        // Suscribirse a cambios en tiempo real para que la lista se actualice sola
-        const channel = supabase
-            .channel('transfers-live')
-            .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
-                table: 'transfers' 
-            }, () => {
-                fetchTransfers()
-            })
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
-        }
-    }, [selectedBranchId])
-
     async function checkUserRole() {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
             const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single()
             setIsAdmin(data?.role === 'Administrador')
-
-            // Cargar las sucursales a las que el usuario tiene acceso
-            const { data: branches } = await supabase
-                .from('user_branches')
-                .select('branch_id')
-                .eq('user_id', user.id)
-            
-            if (branches) {
-                setUserBranchIds(branches.map(b => b.branch_id))
-            }
         }
     }
 
-    const [userBranchIds, setUserBranchIds] = useState([])
+    const calculateStats = useCallback((data) => {
+        setStats({
+            pending: data.filter(t => t.status === 'Pendiente').length,
+            inTransit: data.filter(t => t.status === 'Enviado').length,
+            received: data.filter(t => t.status === 'Recibido').length
+        })
+    }, [])
 
-    // ... (existing state) ...
-
-    async function fetchTransfers() {
+    const fetchTransfers = useCallback(async () => {
         try {
             setLoading(true)
-            setError(null)
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
-
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-            const isUserAdmin = profile?.role === 'Administrador'
 
             // Obtener las sucursales asignadas al usuario
             const { data: assignments } = await supabase
@@ -121,7 +96,8 @@ export default function Transfers() {
                     origin:origin_branch_id (name),
                     destination:destination_branch_id (name),
                     sender:profiles!fk_transfers_sender (full_name),
-                    receiver:profiles!fk_transfers_receiver (full_name)
+                    receiver:profiles!fk_transfers_receiver (full_name),
+                    transfer_items (count)
                 `)
                 .order('created_at', { ascending: false })
 
@@ -143,18 +119,211 @@ export default function Transfers() {
             calculateStats(data || [])
         } catch (err) {
             console.error('Error fetching transfers:', err)
-            setError('Error al cargar el historial de traspasos.')
         } finally {
             setLoading(false)
         }
+    }, [selectedBranchId, calculateStats])
+
+    useEffect(() => {
+        fetchTransfers()
+
+        // Suscribirse a cambios en tiempo real para que la lista se actualice sola
+        const channel = supabase
+            .channel('transfers-live')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'transfers' 
+            }, () => {
+                fetchTransfers()
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [fetchTransfers])
+
+    const openReport = async () => {
+        try {
+            setReportLoading(true)
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            const { data: assignments } = await supabase
+                .from('user_branches')
+                .select('branch_id')
+                .eq('user_id', user.id)
+
+            const myBranchIds = assignments?.map(a => a.branch_id) || []
+
+            let query = supabase
+                .from('transfers')
+                .select(`
+                    *,
+                    origin:origin_branch_id (name),
+                    destination:destination_branch_id (name),
+                    sender:profiles!fk_transfers_sender (full_name),
+                    receiver:profiles!fk_transfers_receiver (full_name),
+                    items:transfer_items (*, product:product_id (name, sku))
+                `)
+                .order('created_at', { ascending: false })
+
+            if (myBranchIds.length === 0) {
+                setReportTransfers([])
+                setIsReportOpen(true)
+                return
+            }
+
+            if (selectedBranchId && selectedBranchId !== 'all') {
+                query = query.or(`origin_branch_id.eq.${selectedBranchId},destination_branch_id.eq.${selectedBranchId}`)
+            } else {
+                const orFilters = myBranchIds.map(id =>
+                    `origin_branch_id.eq.${id},destination_branch_id.eq.${id}`
+                ).join(',')
+                query = query.or(orFilters)
+            }
+
+            // Aplicar el mismo filtro de búsqueda del listado
+            if (searchTerm.trim()) {
+                const term = searchTerm.trim().toLowerCase()
+                const { data: all } = await query
+                const filtered = (all || []).filter(t =>
+                    t.transfer_number?.toString().toLowerCase().includes(term) ||
+                    t.origin?.name?.toLowerCase().includes(term) ||
+                    t.destination?.name?.toLowerCase().includes(term)
+                )
+                setReportTransfers(filtered)
+            } else {
+                const { data, error } = await query
+                if (error) throw error
+                setReportTransfers(data || [])
+            }
+
+            setIsReportOpen(true)
+        } catch (err) {
+            console.error('Error cargando reporte:', err)
+            showToast('Error al generar el reporte de traspasos.', 'error')
+        } finally {
+            setReportLoading(false)
+        }
     }
 
-    const calculateStats = (data) => {
-        setStats({
-            pending: data.filter(t => t.status === 'Pendiente').length,
-            inTransit: data.filter(t => t.status === 'Enviado').length,
-            received: data.filter(t => t.status === 'Recibido').length
+    const handlePrintReport = () => {
+        if (reportTransfers.length === 0) return
+
+        const printWindow = window.open('', '_blank', 'width=1100,height=900')
+        const unitTotal = reportTransfers.reduce((acc, t) =>
+            acc + (t.items || []).reduce((s, i) => s + Number(i.quantity || 0), 0), 0)
+        const itemsTotal = reportTransfers.reduce((acc, t) => acc + (t.items?.length || 0), 0)
+
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Reporte de Traspasos</title>
+                    <style>
+                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                        th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+                        td { border: 1px solid #e2e8f0; padding: 10px; font-size: 12px; }
+                        .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
+                        .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; }
+                        .total-row { background-color: #f1f5f9; font-weight: bold; font-size: 14px; }
+                        .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+                        .st-Pendiente { background: #f1f5f9; color: #475569; }
+                        .st-Enviado { background: #e0f2fe; color: #0369a1; }
+                        .st-Recibido { background: #dcfce7; color: #15803d; }
+                        .st-Cancelado { background: #fee2e2; color: #b91c1c; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1 style="margin: 0; color: #1e293b;">REPORTE DE TRASPASOS LOGÍSTICOS</h1>
+                        <p style="margin: 5px 0; color: #64748b;">Generado el: ${new Date().toLocaleString()}</p>
+                        <p style="margin: 5px 0; color: #64748b;">Total de traspasos: <strong>${reportTransfers.length}</strong> | Ítems: <strong>${itemsTotal}</strong> | Unidades: <strong>${unitTotal}</strong></p>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>N° Traspaso</th>
+                                <th>Fecha</th>
+                                <th>Origen</th>
+                                <th>Destino</th>
+                                <th style="text-align: center;">Ítems</th>
+                                <th style="text-align: center;">Unidades</th>
+                                <th>Estado</th>
+                                <th>Enviado por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${reportTransfers.map((t, index) => {
+                                const units = (t.items || []).reduce((s, i) => s + Number(i.quantity || 0), 0)
+                                return `
+                                    <tr>
+                                        <td>${index + 1}</td>
+                                        <td>#${t.transfer_number || t.id.slice(0, 8)}</td>
+                                        <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                                        <td>${t.origin?.name || 'N/A'}</td>
+                                        <td>${t.destination?.name || 'N/A'}</td>
+                                        <td style="text-align: center;">${t.items?.length || 0}</td>
+                                        <td style="text-align: center;">${units}</td>
+                                        <td><span class="badge st-${t.status}">${t.status}</span></td>
+                                        <td>${t.sender?.full_name?.split(' ')[0] || 'Sistema'}</td>
+                                    </tr>
+                                `
+                            }).join('')}
+                        </tbody>
+                        <tfoot>
+                            <tr class="total-row">
+                                <td colspan="4" style="text-align: right; padding: 15px;">TOTAL GENERAL</td>
+                                <td></td>
+                                <td style="text-align: center; padding: 15px;">${itemsTotal}</td>
+                                <td style="text-align: center; padding: 15px;">${unitTotal}</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <div class="footer">
+                        Documento generado automáticamente por el Sistema de Gestión de Inventario
+                    </div>
+                </body>
+            </html>
+        `)
+        printWindow.document.close()
+        printWindow.print()
+    }
+
+    const handleExportExcel = () => {
+        if (reportTransfers.length === 0) return
+
+        const rows = reportTransfers.map((t, index) => {
+            const items = (t.items || []).map(i => `${i.product?.name || 'N/A'} x${i.quantity}`).join(', ')
+            return {
+                'Nro': index + 1,
+                'Traspaso': t.transfer_number || '',
+                'Fecha': new Date(t.created_at).toLocaleDateString(),
+                'Origen': t.origin?.name || '',
+                'Destino': t.destination?.name || '',
+                'Estado': t.status,
+                'Nro Items': t.items?.length || 0,
+                'Unidades': (t.items || []).reduce((s, i) => s + Number(i.quantity || 0), 0),
+                'Enviado por': t.sender?.full_name || '',
+                'Recibido por': t.receiver?.full_name || '',
+                'Detalle': items
+            }
         })
+
+        const ws = utils.json_to_sheet(rows)
+        ws['!cols'] = [
+            { wch: 5 }, { wch: 10 }, { wch: 12 }, { wch: 22 }, { wch: 22 },
+            { wch: 12 }, { wch: 9 }, { wch: 9 }, { wch: 15 }, { wch: 15 }, { wch: 50 }
+        ]
+        const wb = utils.book_new()
+        utils.book_append_sheet(wb, ws, "Traspasos")
+        writeFile(wb, `Reporte_Traspasos_${new Date().toISOString().slice(0, 10)}.xlsx`)
     }
 
     const handleSave = async (transferData) => {
@@ -390,6 +559,82 @@ export default function Transfers() {
                 />
             )}
 
+            {/* Reporte de Traspasos */}
+            {isReportOpen && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+                    backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', zIndex: 150, padding: '1rem'
+                }}>
+                    <div className="card shadow-2xl" style={{
+                        width: '100%', maxWidth: '1100px', padding: 0, maxHeight: '92vh',
+                        display: 'flex', flexDirection: 'column', borderRadius: '20px', overflow: 'hidden',
+                        backgroundColor: 'hsl(var(--background))'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '1.25rem 2rem', borderBottom: '1px solid hsl(var(--border) / 0.6)',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            backgroundColor: 'hsl(var(--secondary) / 0.1)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ padding: '0.6rem', backgroundColor: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', borderRadius: '12px' }}>
+                                    <FileText size={22} />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: '1.2rem', fontWeight: '800', margin: 0, letterSpacing: '-0.02em' }}>Reporte de Traspasos</h2>
+                                    <p style={{ fontSize: '0.8rem', fontWeight: '500', opacity: 0.5, margin: 0 }}>
+                                        {reportTransfers.length} traspasos registrados
+                                    </p>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                                <button className="btn" onClick={handlePrintReport} disabled={reportTransfers.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', borderRadius: '12px', fontWeight: '800', backgroundColor: 'hsl(var(--primary) / 0.05)', color: 'hsl(var(--primary))', border: '1.5px solid hsl(var(--primary))', cursor: 'pointer' }}>
+                                    <Printer size={18} /> IMPRIMIR
+                                </button>
+                                <button className="btn" onClick={handleExportExcel} disabled={reportTransfers.length === 0} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', borderRadius: '12px', fontWeight: '800', backgroundColor: 'hsl(142 76% 36% / 0.08)', color: 'hsl(142 76% 36%)', border: '1.5px solid hsl(142 76% 36%)', cursor: 'pointer' }}>
+                                    <FileSpreadsheet size={18} /> EXCEL
+                                </button>
+                                <button onClick={() => setIsReportOpen(false)} className="btn" style={{ padding: '0.5rem', borderRadius: '50%' }}>
+                                    <X size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Body */}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 2rem' }}>
+                            {reportLoading ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '4rem', opacity: 0.3 }}>
+                                    <RefreshCw size={32} className="animate-spin" />
+                                    <p style={{ marginTop: '1rem', fontWeight: '600' }}>Generando reporte...</p>
+                                </div>
+                            ) : reportTransfers.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '4rem', opacity: 0.3 }}>
+                                    <FileText size={48} style={{ margin: '0 auto 1rem' }} />
+                                    <p style={{ fontWeight: '700' }}>No hay traspasos para mostrar.</p>
+                                </div>
+                            ) : (
+                                <ReportTable transfers={reportTransfers} />
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '1.25rem 2rem', borderTop: '1px solid hsl(var(--border) / 0.6)',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            backgroundColor: 'hsl(var(--secondary) / 0.05)'
+                        }}>
+                            <div style={{ fontSize: '0.85rem', fontWeight: '600', opacity: 0.6 }}>
+                                Se imprime/exporta el reporte completo con todos los traspasos.
+                            </div>
+                            <button className="btn btn-primary shadow-lg shadow-primary/20" onClick={() => setIsReportOpen(false)} style={{ padding: '0.75rem 2rem', borderRadius: '12px', fontWeight: '800' }}>
+                                CERRAR VISTA
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Custom Delete Confirmation Modal */}
             {deleteTarget && (
                 <div style={{
@@ -437,6 +682,15 @@ export default function Transfers() {
                     <p style={{ color: 'hsl(var(--secondary-foreground) / 0.6)', fontWeight: '500' }}>Control y distribución de mercadería entre sucursales</p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button
+                        className="btn shadow-sm"
+                        onClick={() => openReport()}
+                        disabled={loading || reportLoading}
+                        title="Reporte imprimible de traspasos"
+                        style={{ backgroundColor: 'hsl(var(--secondary) / 0.5)', borderRadius: '12px', padding: '0.75rem' }}
+                    >
+                        <FileText size={20} />
+                    </button>
                     <button
                         className="btn shadow-sm"
                         onClick={fetchTransfers}
@@ -660,7 +914,7 @@ export default function Transfers() {
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
                                             <Box size={14} opacity={0.4} />
                                             <span style={{ opacity: 0.6 }}>Items:</span>
-                                            <span style={{ fontWeight: '700' }}>Cargando... </span> {/* Podría optimizarse trayendo el count en la query principal */}
+                                            <span style={{ fontWeight: '700' }}>{t.transfer_items?.[0]?.count ?? 0}</span>
                                         </div>
                                         {t.receiver && (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem' }}>
@@ -808,5 +1062,110 @@ export default function Transfers() {
                 }
             `}</style>
         </div>
+    )
+}
+
+function ReportTable({ transfers }) {
+    const [page, setPage] = useState(1)
+    const pageSize = 10
+
+    const totalPages = Math.max(1, Math.ceil(transfers.length / pageSize))
+    const safePage = Math.min(page, totalPages)
+    const rows = transfers.slice((safePage - 1) * pageSize, safePage * pageSize)
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'Pendiente': return { bg: 'hsl(var(--secondary) / 0.5)', text: 'hsl(var(--secondary-foreground))' }
+            case 'Enviado': return { bg: 'hsl(var(--primary) / 0.1)', text: 'hsl(var(--primary))' }
+            case 'Recibido': return { bg: 'hsl(142 76% 36% / 0.1)', text: 'hsl(142 76% 36%)' }
+            case 'Cancelado': return { bg: 'hsl(var(--destructive) / 0.1)', text: 'hsl(var(--destructive))' }
+            default: return { bg: 'hsl(var(--secondary))', text: 'hsl(var(--secondary-foreground))' }
+        }
+    }
+
+    return (
+        <>
+            <div style={{ borderRadius: '14px', border: '1px solid hsl(var(--border) / 0.5)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead style={{ backgroundColor: 'hsl(var(--secondary) / 0.3)' }}>
+                        <tr>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>#</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>N°</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Fecha</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Origen</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Destino</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Ítems</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'center', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Unidades</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Estado</th>
+                            <th style={{ padding: '0.85rem 1rem', textAlign: 'left', fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', opacity: 0.5 }}>Enviado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((t, i) => {
+                            const units = (t.items || []).reduce((s, it) => s + Number(it.quantity || 0), 0)
+                            const st = getStatusColor(t.status)
+                            return (
+                                <tr key={t.id} style={{ borderBottom: '1px solid hsl(var(--border) / 0.3)' }}>
+                                    <td style={{ padding: '0.9rem 1rem', fontWeight: '600', opacity: 0.4 }}>{(safePage - 1) * pageSize + i + 1}</td>
+                                    <td style={{ padding: '0.9rem 1rem' }}>
+                                        <span style={{ fontFamily: 'monospace', fontWeight: '800', fontSize: '0.8rem', color: 'hsl(var(--primary))', backgroundColor: 'hsl(var(--primary) / 0.08)', padding: '2px 8px', borderRadius: '6px' }}>
+                                            #{t.transfer_number || t.id.slice(0, 8)}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '0.9rem 1rem', fontSize: '0.85rem', fontWeight: '600' }}>{new Date(t.created_at).toLocaleDateString()}</td>
+                                    <td style={{ padding: '0.9rem 1rem', fontWeight: '700', fontSize: '0.85rem' }}>{t.origin?.name || 'N/A'}</td>
+                                    <td style={{ padding: '0.9rem 1rem', fontWeight: '700', fontSize: '0.85rem' }}>{t.destination?.name || 'N/A'}</td>
+                                    <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: '800', fontSize: '0.85rem' }}>{t.items?.length || 0}</td>
+                                    <td style={{ padding: '0.9rem 1rem', textAlign: 'center', fontWeight: '800', fontSize: '0.85rem' }}>{units}</td>
+                                    <td style={{ padding: '0.9rem 1rem' }}>
+                                        <span style={{ padding: '3px 10px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: '800', textTransform: 'uppercase', backgroundColor: st.bg, color: st.text }}>
+                                            {t.status}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '0.9rem 1rem', fontSize: '0.85rem', fontWeight: '600' }}>{t.sender?.full_name?.split(' ')[0] || 'Sistema'}</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {totalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', padding: '1rem 0', marginTop: '0.5rem' }}>
+                    <button
+                        className="btn"
+                        onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                        disabled={safePage === 1}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '800', backgroundColor: 'hsl(var(--secondary) / 0.5)', border: 'none', cursor: safePage === 1 ? 'not-allowed' : 'pointer', opacity: safePage === 1 ? 0.5 : 1 }}
+                    >
+                        <ChevronLeft size={16} /> Anterior
+                    </button>
+                    <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                        {[...Array(totalPages)].map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => setPage(i + 1)}
+                                style={{
+                                    width: '34px', height: '34px', borderRadius: '10px', border: 'none',
+                                    backgroundColor: safePage === i + 1 ? 'hsl(var(--primary))' : 'hsl(var(--secondary) / 0.3)',
+                                    color: safePage === i + 1 ? 'white' : 'hsl(var(--foreground) / 0.6)',
+                                    fontWeight: '900', cursor: 'pointer', fontSize: '0.85rem'
+                                }}
+                            >
+                                {i + 1}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        className="btn"
+                        onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={safePage === totalPages}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem', borderRadius: '12px', fontSize: '0.85rem', fontWeight: '800', backgroundColor: 'hsl(var(--secondary) / 0.5)', border: 'none', cursor: safePage === totalPages ? 'not-allowed' : 'pointer', opacity: safePage === totalPages ? 0.5 : 1 }}
+                    >
+                        Siguiente <ChevronRight size={16} />
+                    </button>
+                </div>
+            )}
+        </>
     )
 }

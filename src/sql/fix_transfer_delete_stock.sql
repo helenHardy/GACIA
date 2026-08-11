@@ -1,3 +1,5 @@
+-- OBSOLETO: Este script fue reemplazado por fix_transfers_stock_consistency.sql.
+-- NO volver a ejecutar por separado (duplica/contradice la lógica consolidada).
 -- =====================================================
 -- CORRECCIÓN: REVERSIÓN DE STOCK AL ELIMINAR TRASPASOS EN TRÁNSITO
 -- =====================================================

@@ -364,7 +364,8 @@ export default function Sales() {
                     filename:     `Comprobante_${sale.sale_number || 'venta'}.pdf`,
                     image:        { type: 'jpeg', quality: 0.98 },
                     html2canvas:  { scale: 2, useCORS: true },
-                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
                 };
                 html2pdf().set(opt).from(ticketRef.current).save().then(() => setLoading(false));
             }, 100)
@@ -670,10 +671,14 @@ export default function Sales() {
             <head>
                 <title>${isSoldTab ? 'Reporte de Productos Vendidos' : 'Reporte de Ventas'}</title>
                 <style>
-                    body { font-family: sans-serif; padding: 40px; color: #1a1a1a; }
+                    @page { size: A4; margin: 12mm; }
+                    body { font-family: sans-serif; padding: 0; color: #1a1a1a; }
                     table { width: 100%; border-collapse: collapse; margin-top: 25px; }
                     th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; font-size: 13px; }
                     th { background-color: #f9fafb; font-weight: bold; color: #374151; }
+                    thead { display: table-header-group; }
+                    tbody { display: table-row-group; }
+                    tr { break-inside: avoid; page-break-inside: avoid; }
                     .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #3b82f6; padding-bottom: 20px; }
                     .footer { margin-top: 40px; text-align: right; font-weight: 900; font-size: 18px; color: #3b82f6; }
                 </style>
@@ -1678,7 +1683,7 @@ export default function Sales() {
             )}
 
             {/* Hidden Ticket reference for printing */}
-            <div style={{ display: 'none' }}>
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
                 {saleForTicket && (
                     <Ticket
                         ref={ticketRef}

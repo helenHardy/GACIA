@@ -252,6 +252,11 @@ drop trigger if exists trg_kardex_purchase on public.purchase_items;
 
 
 -- 4. Trigger para TRASPASOS (transfers update)
+-- NOTA: Las funciones y triggers de TRASPASOS de este archivo están
+-- OBSOLETOS y fueron reemplazados por fix_transfers_stock_consistency.sql.
+-- Si se desea la lógica de traspasos completa y consistente (incluida la
+-- validación de stock en envío), ejecutar fix_transfers_stock_consistency.sql
+-- DESPUÉS de este archivo.
 create or replace function public.handle_transfer_status_changes()
 returns trigger as $$
 declare

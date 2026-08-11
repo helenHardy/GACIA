@@ -166,10 +166,14 @@ export default function Reports() {
                 <head>
                     <title>Factura #${selectedInvoice.sale_number}</title>
                     <style>
-                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        @page { size: A4; margin: 12mm; }
+                        body { font-family: 'Inter', sans-serif; padding: 0; color: #334155; }
                         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
                         th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; }
                         td { border: 1px solid #e2e8f0; padding: 12px; font-size: 13px; }
+                        thead { display: table-header-group; }
+                        tbody { display: table-row-group; }
+                        tr { break-inside: avoid; page-break-inside: avoid; }
                         .header { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #eee; padding-bottom: 20px; }
                         .total-box { text-align: right; margin-top: 20px; font-size: 18px; font-weight: bold; }
                     </style>
@@ -237,10 +241,14 @@ export default function Reports() {
                 <head>
                     <title>Reporte de Ventas - ${new Date().toLocaleDateString()}</title>
                     <style>
-                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        @page { size: A4; margin: 12mm; }
+                        body { font-family: 'Inter', sans-serif; padding: 0; color: #334155; }
                         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
                         th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
                         td { border: 1px solid #e2e8f0; padding: 10px; font-size: 12px; }
+                        thead { display: table-header-group; }
+                        tbody { display: table-row-group; }
+                        tr { break-inside: avoid; page-break-inside: avoid; }
                         .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
                         .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; }
                         .total-row { background-color: #f1f5f9; font-weight: bold; font-size: 14px; }
@@ -622,10 +630,14 @@ export default function Reports() {
                 <head>
                     <title>Reporte de Deudores - ${new Date().toLocaleDateString()}</title>
                     <style>
-                        body { font-family: 'Inter', sans-serif; padding: 40px; color: #334155; }
+                        @page { size: A4; margin: 12mm; }
+                        body { font-family: 'Inter', sans-serif; padding: 0; color: #334155; }
                         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
                         th { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
                         td { border: 1px solid #e2e8f0; padding: 10px; font-size: 12px; }
+                        thead { display: table-header-group; }
+                        tbody { display: table-row-group; }
+                        tr { break-inside: avoid; page-break-inside: avoid; }
                         .header { margin-bottom: 30px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
                         .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94a3b8; }
                         .total-row { background-color: #f1f5f9; font-weight: bold; font-size: 14px; }
