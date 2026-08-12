@@ -49,6 +49,7 @@ export default function Reports() {
     const [invoices, setInvoices] = useState([])
     const [debtors, setDebtors] = useState([])
     const [selectedInvoice, setSelectedInvoice] = useState(null)
+    const [salesSummary, setSalesSummary] = useState({ gross: 0, discount: 0, tax: 0, net: 0 })
     
     // Filters
     const [period, setPeriod] = useState('day') // 'day', 'month', 'year', 'range'
@@ -234,7 +235,6 @@ export default function Reports() {
         if (soldProducts.length === 0) return
 
         const printWindow = window.open('', '_blank', 'width=1000,height=900')
-        const totalSold = soldProducts.reduce((acc, item) => acc + (item.quantity * item.price), 0)
 
         printWindow.document.write(`
             <html>
@@ -281,15 +281,27 @@ export default function Reports() {
                                     <td>${item.product?.brand?.name || 'N/A'}</td>
                                     <td>${item.product?.model?.name || 'N/A'}</td>
                                     <td style="text-align: center;">${item.quantity}</td>
-                                    <td style="text-align: right;">Bs. ${Number(item.price).toFixed(2)}</td>
-                                    <td style="text-align: right; font-weight: bold;">Bs. ${(item.quantity * item.price).toFixed(2)}</td>
+                                    <td style="text-align: right;">Bs. ${(item.quantity > 0 ? (Number(item.total) / Number(item.quantity)) : 0).toFixed(2)}</td>
+                                    <td style="text-align: right; font-weight: bold;">Bs. ${Number(item.total).toFixed(2)}</td>
                                 </tr>
                             `).join('')}
                         </tbody>
                         <tfoot>
+                            <tr>
+                                <td colspan="6" style="text-align: right; padding: 10px;">TOTAL BRUTO</td>
+                                <td style="text-align: right; padding: 10px;">Bs. ${salesSummary.gross.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="6" style="text-align: right; padding: 10px;">DESCUENTOS (-)</td>
+                                <td style="text-align: right; padding: 10px;">- Bs. ${salesSummary.discount.toFixed(2)}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="6" style="text-align: right; padding: 10px;">IMPUESTOS (+)</td>
+                                <td style="text-align: right; padding: 10px;">+ Bs. ${salesSummary.tax.toFixed(2)}</td>
+                            </tr>
                             <tr class="total-row">
-                                <td colspan="6" style="text-align: right; padding: 15px;">TOTAL GENERAL</td>
-                                <td style="text-align: right; padding: 15px;">Bs. ${totalSold.toFixed(2)}</td>
+                                <td colspan="6" style="text-align: right; padding: 15px;">TOTAL GENERAL (NETO)</td>
+                                <td style="text-align: right; padding: 15px;">Bs. ${salesSummary.net.toFixed(2)}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -320,7 +332,10 @@ export default function Reports() {
                     sale:sale_id!inner (
                         created_at, 
                         sale_number, 
-                        branch_id
+                        branch_id, 
+                        discount,
+                        tax,
+                        total
                     )
                 `)
 
@@ -377,6 +392,32 @@ export default function Reports() {
                 grouped[key].quantity += Number(item.quantity)
                 grouped[key].total += Number(item.total)
             })
+
+            // Net totals: el NETO sale de sales.total (cada venta ya trae descuentos
+            // e impuestos aplicados, igual que el Reporte de Factura / historial).
+            // Bruto = suma de líneas de productos (precio × cantidad).
+            const salesMap = {}
+            let gross = 0
+            ;(data || []).forEach(item => {
+                gross += Number(item.total) || 0
+                const s = item.sale
+                const saleId = item.sale_id ?? s?.id
+                if (saleId != null && s) {
+                    if (!salesMap[saleId]) {
+                        salesMap[saleId] = {
+                            total: Number(s.total) || 0,
+                            discount: Number(s.discount) || 0,
+                            tax: Number(s.tax) || 0
+                        }
+                    }
+                }
+            })
+            const saleTotals = Object.values(salesMap)
+            const netTotal = saleTotals.reduce((acc, v) => acc + v.total, 0)
+            const taxTotal = saleTotals.reduce((acc, v) => acc + v.tax, 0)
+            // Descuento/ajuste efectivo: lo que no se ve en las líneas pero sí en totales
+            const discountTotal = Math.max(0, gross + taxTotal - netTotal)
+            setSalesSummary({ gross, discount: discountTotal, tax: taxTotal, net: netTotal })
 
             const groupedArray = Object.values(grouped).sort((a, b) => {
                 const skuA = a.product?.sku || ''
@@ -616,7 +657,6 @@ export default function Reports() {
     }
 
     const totalInvoicesSum = invoices.reduce((acc, inv) => acc + Number(inv.total), 0)
-    const totalSold = soldProducts.reduce((acc, item) => acc + Number(item.total), 0)
     const totalDebt = debtors.reduce((acc, inv) => acc + Number(inv.balance), 0)
     const uniqueDebtorCount = new Set(debtors.map(inv => inv.customer_id)).size
 
@@ -949,7 +989,7 @@ export default function Reports() {
                                             <td style={{ padding: '1rem', fontWeight: '700' }}>{item.product?.brand?.name || 'N/A'}</td>
                                             <td style={{ padding: '1rem', fontWeight: '600' }}>{item.product?.model?.name || 'N/A'}</td>
                                             <td style={{ padding: '1rem', textAlign: 'center', fontWeight: '800' }}>{item.quantity}</td>
-                                            <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '600' }}>Bs. {Number(item.price).toFixed(2)}</td>
+                                            <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '600' }}>Bs. {(item.quantity > 0 ? (Number(item.total) / Number(item.quantity)) : 0).toFixed(2)}</td>
                                             <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '900', color: 'hsl(var(--primary))' }}>Bs. {Number(item.total).toFixed(2)}</td>
                                         </tr>
                                     ))
@@ -957,8 +997,20 @@ export default function Reports() {
                             </tbody>
                             <tfoot style={{ backgroundColor: 'hsl(var(--primary))', color: 'white' }}>
                                 <tr>
-                                    <td colSpan="6" style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '800', fontSize: '1.1rem' }}>TOTAL GENERAL</td>
-                                    <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem' }}>Bs. {totalSold.toFixed(2)}</td>
+                                    <td colSpan="6" style={{ padding: '1rem 2rem', textAlign: 'right', fontWeight: '800' }}>TOTAL BRUTO</td>
+                                    <td style={{ padding: '1rem 2rem', textAlign: 'right', fontWeight: '800' }}>Bs. {salesSummary.gross.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td colSpan="6" style={{ padding: '0.5rem 2rem', textAlign: 'right', fontWeight: '600', opacity: 0.85 }}>DESCUENTOS (-)</td>
+                                    <td style={{ padding: '0.5rem 2rem', textAlign: 'right', fontWeight: '600', opacity: 0.85 }}>- Bs. {salesSummary.discount.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td colSpan="6" style={{ padding: '0.5rem 2rem', textAlign: 'right', fontWeight: '600', opacity: 0.85 }}>IMPUESTOS (+)</td>
+                                    <td style={{ padding: '0.5rem 2rem', textAlign: 'right', fontWeight: '600', opacity: 0.85 }}>+ Bs. {salesSummary.tax.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td colSpan="6" style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '800', fontSize: '1.1rem' }}>TOTAL GENERAL (NETO)</td>
+                                    <td style={{ padding: '1.25rem 2rem', textAlign: 'right', fontWeight: '900', fontSize: '1.4rem' }}>Bs. {salesSummary.net.toFixed(2)}</td>
                                 </tr>
                             </tfoot>
                         </table>
