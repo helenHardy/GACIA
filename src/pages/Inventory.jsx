@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle, Eye, Tag, Layers, ArrowLeft, Image as ImageIcon } from 'lucide-react'
+import { Plus, Search, Filter, Package, AlertTriangle, RefreshCw, Edit2, Trash2, Building2, History, Download, X, CheckCircle, Eye, Tag, Layers, ArrowLeft, Image as ImageIcon, SlidersHorizontal, ClipboardList } from 'lucide-react'
 import { utils, writeFile } from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { inventoryService } from '../services/inventoryService'
 import ProductModal from '../components/inventory/ProductModal'
 import KardexDrawer from '../components/inventory/KardexDrawer'
+import StockAdjustmentModal from '../components/inventory/StockAdjustmentModal'
+import StockAdjustmentsDrawer from '../components/inventory/StockAdjustmentsDrawer'
 import { useBranch } from '../context/BranchContext'
 
 export default function Inventory() {
@@ -34,6 +36,12 @@ export default function Inventory() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingProduct, setEditingProduct] = useState(null)
     const [viewingKardexProduct, setViewingKardexProduct] = useState(null)
+
+    // Stock adjustment state
+    const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false)
+    const [adjustingProduct, setAdjustingProduct] = useState(null)
+    const [isAdjustmentsDrawerOpen, setIsAdjustmentsDrawerOpen] = useState(false)
+    const [pendingAdjustments, setPendingAdjustments] = useState(0)
 
     useEffect(() => {
         if (toast) {
@@ -100,6 +108,28 @@ export default function Inventory() {
     useEffect(() => {
         fetchProducts()
     }, [selectedBranchId, showInactive])
+
+    useEffect(() => {
+        if (isAdmin) fetchPendingAdjustments()
+    }, [isAdmin, selectedBranchId])
+
+    async function fetchPendingAdjustments() {
+        try {
+            let query = supabase
+                .from('stock_adjustments')
+                .select('id', { count: 'exact', head: true })
+                .eq('status', 'PENDIENTE')
+
+            if (selectedBranchId && selectedBranchId !== 'all') {
+                query = query.eq('branch_id', selectedBranchId)
+            }
+
+            const { count } = await query
+            setPendingAdjustments(count || 0)
+        } catch (err) {
+            console.warn('Error fetching pending adjustments:', err)
+        }
+    }
 
 
     const handleExport = () => {
@@ -404,7 +434,32 @@ export default function Inventory() {
                     onClose={() => setViewingKardexProduct(null)}
                 />
             )}
-            
+
+            {isAdjustmentModalOpen && (
+                <StockAdjustmentModal
+                    product={adjustingProduct}
+                    onClose={() => {
+                        setIsAdjustmentModalOpen(false)
+                        setAdjustingProduct(null)
+                    }}
+                    onCreated={(adj) => {
+                        showToast(`Ajuste ${adj?.folio || ''} creado y enviado a aprobación`)
+                        fetchPendingAdjustments()
+                        fetchProducts()
+                    }}
+                />
+            )}
+
+            {isAdjustmentsDrawerOpen && (
+                <StockAdjustmentsDrawer
+                    onClose={() => setIsAdjustmentsDrawerOpen(false)}
+                    onChanged={() => {
+                        fetchPendingAdjustments()
+                        fetchProducts()
+                    }}
+                />
+            )}
+
             {/* Branch Selector Bar (Sucursales) */}
             <div style={{ 
                 display: 'flex', 
@@ -572,15 +627,89 @@ export default function Inventory() {
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                    <button 
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    {isAdmin && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    if (!selectedBranchId || selectedBranchId === 'all') {
+                                        showToast('Seleccione una sucursal específica para ajustar stock', 'error')
+                                        return
+                                    }
+                                    setAdjustingProduct(null)
+                                    setIsAdjustmentModalOpen(true)
+                                }}
+                                className="btn"
+                                style={{
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: '14px',
+                                    backgroundColor: 'hsl(var(--primary))',
+                                    color: 'white',
+                                    fontWeight: '800',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    border: 'none',
+                                    fontSize: '0.9rem',
+                                    position: 'relative'
+                                }}
+                                title="Crear un ajuste de stock individual"
+                            >
+                                <SlidersHorizontal size={18} />
+                                AJUSTAR STOCK
+                            </button>
+                            <button
+                                onClick={() => setIsAdjustmentsDrawerOpen(true)}
+                                className="btn"
+                                style={{
+                                    padding: '0.6rem 1.25rem',
+                                    borderRadius: '14px',
+                                    backgroundColor: 'hsl(var(--secondary))',
+                                    color: 'hsl(var(--secondary-foreground))',
+                                    fontWeight: '800',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                    border: '1px solid hsl(var(--border) / 0.5)',
+                                    fontSize: '0.9rem',
+                                    position: 'relative'
+                                }}
+                                title="Historial y aprobación de ajustes"
+                            >
+                                <ClipboardList size={18} />
+                                AJUSTES
+                                {pendingAdjustments > 0 && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-6px',
+                                        right: '-6px',
+                                        minWidth: '18px',
+                                        height: '18px',
+                                        padding: '0 5px',
+                                        borderRadius: '100px',
+                                        backgroundColor: 'hsl(var(--destructive))',
+                                        color: 'white',
+                                        fontSize: '0.65rem',
+                                        fontWeight: '900',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        border: '2px solid hsl(var(--background))'
+                                    }}>
+                                        {pendingAdjustments}
+                                    </span>
+                                )}
+                            </button>
+                        </>
+                    )}
+                    <button
                         onClick={handleExport}
                         className="btn"
-                        style={{ 
-                            padding: '0.6rem 1.5rem', 
-                            borderRadius: '14px', 
-                            backgroundColor: '#10b981', 
-                            color: 'white', 
+                        style={{
+                            padding: '0.6rem 1.5rem',
+                            borderRadius: '14px',
+                            backgroundColor: '#10b981',
+                            color: 'white',
                             fontWeight: '800',
                             display: 'flex',
                             alignItems: 'center',
@@ -770,6 +899,24 @@ export default function Inventory() {
                                             >
                                                 <History size={16} />
                                             </button>
+
+                                            {isAdmin && (
+                                                <button
+                                                    className="btn"
+                                                    style={{ padding: '0.5rem', color: 'hsl(var(--primary))' }}
+                                                    onClick={() => {
+                                                        if (!selectedBranchId || selectedBranchId === 'all') {
+                                                            showToast('Seleccione una sucursal específica para ajustar stock', 'error')
+                                                            return
+                                                        }
+                                                        setAdjustingProduct(product)
+                                                        setIsAdjustmentModalOpen(true)
+                                                    }}
+                                                    title="Ajustar stock de este producto"
+                                                >
+                                                    <SlidersHorizontal size={16} />
+                                                </button>
+                                            )}
 
                                             {(isAdmin || product.can_edit) ? (
                                                 <button

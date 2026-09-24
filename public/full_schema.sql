@@ -304,6 +304,34 @@ CREATE TABLE IF NOT EXISTS public.inventory_movements (
     created_at timestamp with time zone DEFAULT now()
 );
 
+-- STOCK ADJUSTMENTS (flujo de aprobación; ver stock_adjustments.sql)
+CREATE TABLE IF NOT EXISTS public.stock_adjustments (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    folio text NOT NULL UNIQUE,
+    branch_id bigint NOT NULL REFERENCES public.branches(id),
+    product_id bigint NOT NULL REFERENCES public.products(id),
+    adjustment_type text NOT NULL CHECK (adjustment_type IN ('INCREMENTO', 'DECREMENTO', 'RECALIBRACION')),
+    reason text NOT NULL CHECK (reason IN ('CONTEO_FISICO', 'MERMA', 'DANO', 'ROBO_PERDIDA', 'VENCIMIENTO', 'ERROR_CAPTURA', 'OTRO')),
+    reason_detail text,
+    previous_stock numeric NOT NULL DEFAULT 0,
+    counted_stock numeric CHECK (counted_stock IS NULL OR counted_stock >= 0),
+    quantity_change numeric NOT NULL DEFAULT 0,
+    notes text,
+    status text NOT NULL DEFAULT 'PENDIENTE' CHECK (status IN ('PENDIENTE', 'APROBADO', 'RECHAZADO', 'CANCELADO')),
+    requested_by uuid NOT NULL,
+    requested_at timestamptz NOT NULL DEFAULT now(),
+    approved_by uuid,
+    approved_at timestamptz,
+    rejected_by uuid,
+    rejected_at timestamptz,
+    rejection_reason text,
+    cancelled_by uuid,
+    cancelled_at timestamptz,
+    kardex_id uuid REFERENCES public.kardex(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- SPECIAL PERMISSIONS
 CREATE TABLE IF NOT EXISTS public.special_permissions (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -388,31 +416,71 @@ AFTER INSERT OR UPDATE OR DELETE ON public.product_branch_settings
 FOR EACH ROW EXECUTE FUNCTION public.handle_product_branch_changes();
 
 -- DATABASE CLEANUP FUNCTION
-CREATE OR REPLACE FUNCTION clean_database()
-RETURNS void AS $$
+CREATE OR REPLACE FUNCTION public.clean_database()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_admin_id uuid;
+    v_main_branch_id bigint;
 BEGIN
-    DELETE FROM customer_payments;
-    DELETE FROM sale_items;
-    DELETE FROM purchase_items;
-    DELETE FROM transfer_items;
-    DELETE FROM quotation_items;
-    DELETE FROM kardex;
-    DELETE FROM inventory_movements;
-    DELETE FROM sales;
-    DELETE FROM purchases;
-    DELETE FROM transfers;
-    DELETE FROM quotations;
-    DELETE FROM product_branch_settings;
-    DELETE FROM products;
-    DELETE FROM models;
-    DELETE FROM brands;
-    DELETE FROM categories;
-    DELETE FROM customers;
-    DELETE FROM suppliers;
-    DELETE FROM user_branches WHERE user_id IN (SELECT id FROM profiles WHERE email != 'admin@gmail.com');
-    DELETE FROM profiles WHERE email != 'admin@gmail.com';
+    -- 1. Identificar registros vitales a conservar
+    SELECT id INTO v_admin_id FROM public.profiles WHERE email = 'admin@gmail.com' LIMIT 1;
+    SELECT id INTO v_main_branch_id FROM public.branches WHERE name = 'Casa Matriz' LIMIT 1;
+
+    -- Si no existe Casa Matriz, tomamos la primera sucursal para no romper el sistema
+    IF v_main_branch_id IS NULL THEN
+        SELECT id INTO v_main_branch_id FROM public.branches ORDER BY created_at ASC, id ASC LIMIT 1;
+    END IF;
+
+    -- 2. Limpiar Tablas Operativas y de Movimientos (hijos primero)
+    DELETE FROM public.customer_payments;
+    DELETE FROM public.sale_items;
+    DELETE FROM public.purchase_items;
+    DELETE FROM public.transfer_items;
+    DELETE FROM public.quotation_items;
+    DELETE FROM public.kardex;
+    DELETE FROM public.inventory_movements;
+    DELETE FROM public.notifications;
+    DELETE FROM public.sales;
+    DELETE FROM public.purchases;
+    DELETE FROM public.transfers;
+    DELETE FROM public.quotations;
+    DELETE FROM public.special_permissions;
+
+    -- Si la tabla debt_ledger existe (según versión instalada), también se limpia
+    IF EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE c.relname = 'debt_ledger' AND n.nspname = 'public'
+    ) THEN
+        EXECUTE 'DELETE FROM public.debt_ledger';
+    END IF;
+
+    -- 3. Limpiar Catálogo e Inventario
+    DELETE FROM public.product_branch_settings;
+    DELETE FROM public.products;
+    DELETE FROM public.models;
+    DELETE FROM public.brands;
+    DELETE FROM public.categories;
+    DELETE FROM public.customers;
+    DELETE FROM public.suppliers;
+
+    -- 4. Limpiar Usuarios Secundarios (conservando solo admin@gmail.com)
+    DELETE FROM public.user_branches WHERE user_id IS DISTINCT FROM v_admin_id;
+    DELETE FROM public.profiles WHERE id IS DISTINCT FROM v_admin_id OR v_admin_id IS NULL;
+
+    -- 5. Limpiar Sucursales Secundarias (conservando solo Casa Matriz)
+    DELETE FROM public.branches WHERE id IS DISTINCT FROM v_main_branch_id OR v_main_branch_id IS NULL;
+
+    -- Nota: 'roles', 'role_permissions' y 'settings' se conservan por diseño
+    -- para mantener la estructura y configuración básica del sistema.
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.clean_database() TO authenticated;
 
 -- ADMIN CHANGE USER PASSWORD FUNCTION
 CREATE OR REPLACE FUNCTION admin_change_user_password(target_user_id uuid, new_password text)

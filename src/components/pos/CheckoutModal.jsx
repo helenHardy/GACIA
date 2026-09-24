@@ -85,26 +85,26 @@ export default function CheckoutModal({ total, onClose, onConfirm, isProcessing,
         let val = e.target.value;
         let numVal = parseFloat(val) || 0;
         
-        if (numVal > total) {
-            numVal = total;
-            val = total.toString();
+        if (numVal > finalTotal) {
+            numVal = finalTotal;
+            val = finalTotal.toString();
         }
 
         setAmountCash(val);
-        setAmountQr((total - numVal).toFixed(2));
+        setAmountQr((finalTotal - numVal).toFixed(2));
     }
 
     const handleQrChange = (e) => {
         let val = e.target.value;
         let numVal = parseFloat(val) || 0;
         
-        if (numVal > total) {
-            numVal = total;
-            val = total.toString();
+        if (numVal > finalTotal) {
+            numVal = finalTotal;
+            val = finalTotal.toString();
         }
 
         setAmountQr(val);
-        setAmountCash((total - numVal).toFixed(2));
+        setAmountCash((finalTotal - numVal).toFixed(2));
     }
 
     const handleConfirm = () => {

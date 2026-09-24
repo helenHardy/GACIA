@@ -51,7 +51,12 @@ export default function Settings() {
             window.location.reload() // Reload to refresh all application state
         } catch (err) {
             console.error('Error cleaning database:', err)
-            alert('Error al limpiar la base de datos: ' + err.message)
+            const msg = err.message || String(err)
+            if (/clean_database|function/i.test(msg) && /not found|no existe|not exist|does not exist/i.test(msg)) {
+                alert('La función limpiar_database no está instalada en la base de datos.\n\nEjecute el script src/sql/clean_database.sql en el SQL Editor de Supabase y vuelva a intentarlo.')
+            } else {
+                alert('Error al limpiar la base de datos: ' + msg)
+            }
         } finally {
             setIsCleaning(false)
         }

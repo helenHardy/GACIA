@@ -33,6 +33,7 @@ BEGIN
     END IF;
 
     -- 2. Eliminar versiones previas de register_sale_v3 para evitar sobrecargas
+    EXECUTE 'DROP FUNCTION IF EXISTS public.register_sale_v3(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, bigint, bigint, boolean, text, text)';
     EXECUTE 'DROP FUNCTION IF EXISTS public.register_sale_v3(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, bigint, bigint, boolean, uuid, text)';
     EXECUTE 'DROP FUNCTION IF EXISTS public.register_sale_v3(jsonb, numeric, numeric, numeric, numeric, text, numeric, numeric, uuid, uuid, boolean, uuid, text)';
 
