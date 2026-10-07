@@ -47,9 +47,7 @@ export default function StockAdjustmentsDrawer({ onClose, onChanged }) {
                 .select(`
                     *,
                     product:products(name, sku),
-                    branch:branches(name),
-                    requester:requested_by(id),
-                    approver:approved_by(id)
+                    branch:branches(name)
                 `)
                 .order('created_at', { ascending: false })
                 .limit(100)

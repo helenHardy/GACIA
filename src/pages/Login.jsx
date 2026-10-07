@@ -18,7 +18,7 @@ export default function Login() {
 
         try {
             const { error: authError } = await supabase.auth.signInWithPassword({
-                email,
+                email: email.trim().toLowerCase(),
                 password,
             })
 
@@ -26,9 +26,16 @@ export default function Login() {
             navigate('/')
         } catch (err) {
             console.error('Login error:', err)
-            setError(err.message === 'Invalid login credentials'
-                ? 'Credenciales inválidas. Verifica tu correo y contraseña.'
-                : err.message)
+            const msg = err?.message || 'Error inesperado.'
+            setError(
+                msg === 'Invalid login credentials'
+                    ? 'Credenciales inválidas. Verifica tu correo y contraseña.'
+                    : msg.includes('Email not confirmed')
+                        ? 'Debes confirmar tu correo electrónico antes de iniciar sesión.'
+                        : msg.includes('rate limit') || msg.includes('For security purposes')
+                            ? 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.'
+                            : msg
+            )
         } finally {
             setLoading(false)
         }
